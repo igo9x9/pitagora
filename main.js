@@ -42,12 +42,13 @@ phina.globalize();
       .setPosition(x, y)
       .addChildTo(sc)
       .setInteractive(true);
-    Label({
+    var buttonLabel = Label({
       text: text,
       fontSize: 27,
       fill: "#fff",
       fontWeight: "bold",
     }).addChildTo(r);
+    r.buttonLabel = buttonLabel;
     r.onpointstart = fn;
     return r;
   }
@@ -90,6 +91,7 @@ phina.globalize();
       this.turn = "white";
       this.running = false;
       this.replaying = false;
+      this.replayPaused = false;
       this.canStart = true;
       this.objects = [];
       this.frames = [];
@@ -117,13 +119,18 @@ phina.globalize();
     updateButtons: function () {
       if (!this.startButton || !this.replayButton) return;
       var startEnabled = this.canStart && !this.running && !this.replaying;
-      var replayEnabled = !this.running && !this.replaying && this.frames.length > 0;
+      var replayEnabled = !this.running && this.frames.length > 0;
       this.startButton.fill = startEnabled ? "#ef6c00" : "#777777";
       this.startButton.alpha = startEnabled ? 1.0 : 0.55;
       this.startButton.setInteractive(startEnabled);
       this.replayButton.fill = replayEnabled ? "#1976d2" : "#777777";
       this.replayButton.alpha = replayEnabled ? 1.0 : 0.55;
       this.replayButton.setInteractive(replayEnabled);
+      if (this.replayButton.buttonLabel) {
+        this.replayButton.buttonLabel.text = this.replaying
+          ? (this.replayPaused ? "再開" : "一時停止")
+          : "再生";
+      }
     },
     drawBase: function () {
       RectangleShape({
@@ -506,15 +513,31 @@ phina.globalize();
       this.updateButtons();
     },
     replay: function () {
-      if (this.running || this.replaying || !this.frames.length) return;
-      this.replaying = true;
+      if (this.running || !this.frames.length) return;
+      if (!this.replaying) {
+        this.replaying = true;
+        this.replayPaused = false;
+        this.fi = 0;
+        this.updateButtons();
+        this.playFrame();
+        return;
+      }
+      if (!this.replayPaused) {
+        this.replayPaused = true;
+        this.tweener.clear();
+        this.msg.text = "一時停止中";
+        this.updateButtons();
+        return;
+      }
+      this.replayPaused = false;
       this.updateButtons();
-      this.fi = 0;
       this.playFrame();
     },
     playFrame: function () {
+      if (!this.replaying || this.replayPaused) return;
       if (this.fi >= this.frames.length) {
         this.replaying = false;
+        this.replayPaused = false;
         this.msg.text = "再生終了";
         this.updateButtons();
         return;
@@ -538,6 +561,7 @@ phina.globalize();
       this.target = { x: TARGET.x, y: TARGET.y };
       this.running = false;
       this.replaying = false;
+      this.replayPaused = false;
       this.canStart = true;
       this.frames = [];
       this.clearHints();
