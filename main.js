@@ -35,7 +35,7 @@ phina.globalize();
       cornerRadius: 16,
       fill: color,
       stroke: "#fff",
-      strokeWidth: 3,
+      strokeWidth: 6,
     })
       .setPosition(x, y)
       .addChildTo(sc)
@@ -57,22 +57,22 @@ phina.globalize();
     superClass: "DisplayScene",
     init: function () {
       this.superInit({ width: W, height: H });
-      this.backgroundColor = "#fff";
+      this.backgroundColor = "#00B050";
 
     // タイトル画像
     var titleLogo = Sprite("titleLogo")
       .addChildTo(this)
       .setPosition(W / 2, 400);
 
-    var targetWidth = 640;
+    var targetWidth = 600;
     var scale = targetWidth / titleLogo.width;
     titleLogo.setScale(scale);      
       
       btn(this, W / 2, 755, 330, "あそぶ", "#ef6c00", () => this.exit("main"));
       Label({
-        text: "石を置いてシチョウを「ピ」まで届けよう！\n注意：白の逃げ道が複数ある場合は失敗です",
+        text: "シチョウで、白石をゴールまで導こう！\n注意：白の逃げ道が複数ある場合は失敗です",
         fontSize: 28,
-        fill: "#263238",
+        fill: "#fff",
         lineHeight: 1.5,
       })
         .setPosition(W / 2, 900)
@@ -83,7 +83,7 @@ phina.globalize();
     superClass: "DisplayScene",
     init: function () {
       this.superInit({ width: W, height: H });
-      this.backgroundColor = "#fff";
+      this.backgroundColor = "#00B050";
       this.board = newBoard();
       this.target = { x: TARGET.x, y: TARGET.y };
       this.turn = "white";
@@ -102,7 +102,7 @@ phina.globalize();
       this.msg = Label({
         text: "空点タップ：白 → 黒 → 空\n石を置いて、右下の「ピ」へ",
         fontSize: 30,
-        fill: "#000",
+        fill: "#fff",
         lineHeight: 1.35,
       })
         .setPosition(W / 2, MY)
@@ -371,7 +371,7 @@ phina.globalize();
         }
       }
       this.save("白が黒石を取れる");
-      this.finish("失敗：赤枠の黒石を取る手もあります", "capture");
+      this.finish("失敗：赤枠の黒石を取る手があります", "capture");
     },
     advance: function () {
       if (!this.running) return;
@@ -479,7 +479,7 @@ phina.globalize();
       this.msg.scaleX = 1;
       this.msg.scaleY = 1;
       this.msg.tweener
-        .to({ scaleX: 1.28, scaleY: 1.28 }, 140, "easeOutBack")
+        .to({ scaleX: 2, scaleY: 2 }, 140, "easeOutBack")
         .to({ scaleX: 1.0, scaleY: 1.0 }, 220, "easeOutQuad");
     },
     finish: function (text, hintType) {
