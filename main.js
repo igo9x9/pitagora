@@ -91,6 +91,7 @@ phina.globalize();
       this.replaying = false;
       this.replayPaused = false;
       this.canStart = true;
+      this.editBoard = null;
       this.objects = [];
       this.frames = [];
       this.branchMarkers = [];
@@ -107,8 +108,8 @@ phina.globalize();
       })
         .setPosition(W / 2, MY)
         .addChildTo(this);
-      this.startButton = btn(this, 150, BY, 190, "スタート", "#ef6c00", () => this.start());
-      this.resetButton = btn(this, 360, BY, 170, "リセット", "#607d8b", () => this.reset());
+      this.startButton = btn(this, 150, BY, 190, "スタート", "#ef6c00", () => this.primaryAction());
+      this.resetButton = btn(this, 360, BY, 170, "全消去", "#607d8b", () => this.reset());
       this.replayButton = btn(this, 570, BY, 170, "再生", "#1976d2", () => this.replay());
       this.updateButtons();
       this.onpointstart = (e) => this.tap(e.pointer.x, e.pointer.y);
@@ -116,11 +117,19 @@ phina.globalize();
     },
     updateButtons: function () {
       if (!this.startButton || !this.replayButton) return;
-      var startEnabled = this.canStart && !this.running && !this.replaying;
+
+      var editing = this.canStart && !this.running && !this.replaying;
+      var canEditAgain = !this.canStart && !this.running && !this.replaying && !!this.editBoard;
+      var primaryEnabled = editing || canEditAgain;
       var replayEnabled = !this.running && this.frames.length > 0;
-      this.startButton.fill = startEnabled ? "#ef6c00" : "#777777";
-      this.startButton.alpha = startEnabled ? 1.0 : 0.55;
-      this.startButton.setInteractive(startEnabled);
+
+      this.startButton.fill = primaryEnabled ? "#ef6c00" : "#777777";
+      this.startButton.alpha = primaryEnabled ? 1.0 : 0.55;
+      this.startButton.setInteractive(primaryEnabled);
+      if (this.startButton.buttonLabel) {
+        this.startButton.buttonLabel.text = canEditAgain ? "手直し" : "スタート";
+      }
+
       this.replayButton.fill = replayEnabled ? "#1976d2" : "#777777";
       this.replayButton.alpha = replayEnabled ? 1.0 : 0.55;
       this.replayButton.setInteractive(replayEnabled);
@@ -129,6 +138,27 @@ phina.globalize();
           ? (this.replayPaused ? "再開" : "一時停止")
           : "再生";
       }
+    },
+    primaryAction: function () {
+      if (this.canStart) this.start();
+      else this.editAgain();
+    },
+    editAgain: function () {
+      if (this.running || this.replaying || !this.editBoard) return;
+      this.tweener.clear();
+      this.board = this.editBoard.clone();
+      this.target = { x: TARGET.x, y: TARGET.y };
+      this.turn = "white";
+      this.running = false;
+      this.replaying = false;
+      this.replayPaused = false;
+      this.canStart = true;
+      this.frames = [];
+      this.clearHints();
+      this.last = null;
+      this.msg.text = "石を手直しして、もう一度スタート";
+      this.render();
+      this.updateButtons();
     },
     drawBase: function () {
       RectangleShape({
@@ -333,6 +363,8 @@ phina.globalize();
     },
     start: function () {
       if (this.running || this.replaying || !this.canStart) return;
+      // プレイヤーが配置した盤面を、手直し用に保存する。
+      this.editBoard = this.board.clone();
       this.canStart = false;
       this.board = this.normal();
       this.target = { x: TARGET.x, y: TARGET.y };
@@ -543,6 +575,7 @@ phina.globalize();
       this.replaying = false;
       this.replayPaused = false;
       this.canStart = true;
+      this.editBoard = null;
       this.frames = [];
       this.clearHints();
       this.last = null;
