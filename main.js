@@ -113,7 +113,7 @@ phina.globalize();
       this.resetButton = btn(this, 360, BY, 170, "リセット", "#607d8b", () => this.reset());
       this.replayButton = btn(this, 570, BY, 170, "再生", "#1976d2", () => this.replay());
       this.updateButtons();
-      this.onpointend = (e) => this.tap(e.pointer.x, e.pointer.y);
+      this.onpointstart = (e) => this.tap(e.pointer.x, e.pointer.y);
       this.render();
     },
     updateButtons: function () {
