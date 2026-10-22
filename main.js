@@ -84,7 +84,7 @@ phina.globalize();
     superClass: "DisplayScene",
     init: function () {
       this.superInit({ width: W, height: H });
-      this.backgroundColor = "#172432";
+      this.backgroundColor = "#fff";
       this.board = newBoard();
       this.target = { x: TARGET.x, y: TARGET.y };
       this.turn = "white";
@@ -102,7 +102,7 @@ phina.globalize();
       this.msg = Label({
         text: "空点タップ：白 → 黒 → 空\n青い × を避けて、右上の「ピ」へ",
         fontSize: 30,
-        fill: "#fff",
+        fill: "#000",
         lineHeight: 1.35,
       })
         .setPosition(W / 2, MY)
