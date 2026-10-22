@@ -59,30 +59,19 @@ phina.globalize();
     init: function () {
       this.superInit({ width: W, height: H });
       this.backgroundColor = "#fff";
-      RectangleShape({
-        width: 640,
-        height: 430,
-        cornerRadius: 12,
-        fill: "#43bd22",
-        stroke: "#111",
-        strokeWidth: 8,
-      })
-        .setPosition(W / 2, 410)
-        .addChildTo(this);
-      Label({
-        text: "ピ タ ゴ ラ\nシ チ ョ ウ",
-        fontSize: 82,
-        fill: "#ffe600",
-        fontWeight: "bold",
-        lineHeight: 1.24,
-        stroke: "#000",
-        strokeWidth: 12,
-      })
-        .setPosition(W / 2, 400)
-        .addChildTo(this);
+
+    // タイトル画像
+    var titleLogo = Sprite("titleLogo")
+      .addChildTo(this)
+      .setPosition(W / 2, 400);
+
+    var targetWidth = 640;
+    var scale = targetWidth / titleLogo.width;
+    titleLogo.setScale(scale);      
+      
       btn(this, W / 2, 755, 330, "あそぶ", "#ef6c00", () => this.exit("main"));
       Label({
-        text: "障害物を避けてシチョウをつなごう！\n注意：白の逃げ道が複数ある場合は失敗とします",
+        text: "障害物を避けてシチョウをつなごう！\n注意：白の逃げ道が複数ある場合は失敗です",
         fontSize: 28,
         fill: "#263238",
         lineHeight: 1.5,
@@ -560,6 +549,12 @@ phina.globalize();
     },
   });
   phina.main(function () {
-    GameApp({ startLabel: "title", width: W, height: H, fit: true }).run();
+    GameApp({ startLabel: "title", width: W, height: H, fit: true,
+    assets: {
+      image: {
+        titleLogo: "title.png",
+      },
+    },
+    }).run();
   });
 })();
