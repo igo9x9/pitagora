@@ -11,15 +11,14 @@ phina.globalize();
     C = BP / (S - 1),
     MY = 735,
     BY = 850;
-  var I = { x: 2, y: 11 },
-    TARGET = { x: 1, y: 11 },
-    GOAL = { x: 11, y: 1 },
-    OBS = { x: 6, y: 6 };
+  var TARGET = { x: 1, y: 11 },
+    GOAL = { x: 11, y: 11 };
   var INIT = [
     { x: 0, y: 10, c: G.BLACK },
     { x: 0, y: 11, c: G.BLACK },
     { x: 1, y: 11, c: G.WHITE },
     { x: 1, y: 12, c: G.BLACK },
+    { x: 2, y: 11, c: G.BLACK },
   ];
   function pos(x, y) {
     return { x: L + x * C, y: T + y * C };
@@ -27,7 +26,6 @@ phina.globalize();
   function newBoard() {
     var b = new G.GoBoard(S);
     INIT.forEach((s) => b.set(s.x, s.y, s.c));
-    b.set(OBS.x, OBS.y, G.BLOCK);
     return b;
   }
   function btn(sc, x, y, w, text, color, fn) {
@@ -72,7 +70,7 @@ phina.globalize();
       
       btn(this, W / 2, 755, 330, "あそぶ", "#ef6c00", () => this.exit("main"));
       Label({
-        text: "障害物を避けてシチョウをつなごう！\n注意：白の逃げ道が複数ある場合は失敗です",
+        text: "石を置いてシチョウを「ピ」まで届けよう！\n注意：白の逃げ道が複数ある場合は失敗です",
         fontSize: 28,
         fill: "#263238",
         lineHeight: 1.5,
@@ -102,7 +100,7 @@ phina.globalize();
       this.base = DisplayElement().addChildTo(this);
       this.drawBase();
       this.msg = Label({
-        text: "空点タップ：白 → 黒 → 空\n青い × を避けて、右上の「ピ」へ",
+        text: "空点タップ：白 → 黒 → 空\n石を置いて、右下の「ピ」へ",
         fontSize: 30,
         fill: "#000",
         lineHeight: 1.35,
@@ -196,35 +194,6 @@ phina.globalize();
           .setPosition(p.x, p.y)
           .addChildTo(this),
       );
-      p = pos(OBS.x, OBS.y);
-      this.add(
-        CircleShape({
-          radius: 23,
-          fill: "#1e88e5",
-          stroke: "#fff",
-          strokeWidth: 4,
-        })
-          .setPosition(p.x, p.y)
-          .addChildTo(this),
-      );
-      this.add(
-        Label({ text: "×", fontSize: 38, fill: "#fff", fontWeight: "bold" })
-          .setPosition(p.x, p.y - 2)
-          .addChildTo(this),
-      );
-      if (this.board.get(I.x, I.y) === G.EMPTY) {
-        p = pos(I.x, I.y);
-        this.add(
-          Label({
-            text: "①",
-            fontSize: 27,
-            fill: "#e53935",
-            fontWeight: "bold",
-          })
-            .setPosition(p.x, p.y)
-            .addChildTo(this),
-        );
-      }
       for (var y = 0; y < S; y++)
         for (var x = 0; x < S; x++) {
           var c = this.board.get(x, y);
@@ -304,9 +273,7 @@ phina.globalize();
     },
     fixed: function (x, y) {
       return (
-        (x === OBS.x && y === OBS.y) ||
         (x === GOAL.x && y === GOAL.y) ||
-        (x === I.x && y === I.y) ||
         (x === TARGET.x && y === TARGET.y - 1) ||
         INIT.some((s) => s.x === x && s.y === y)
       );
@@ -352,8 +319,6 @@ phina.globalize();
           }
       INIT.forEach((s) => b.set(s.x, s.y, s.c));
       b.set(TARGET.x, TARGET.y - 1, G.EMPTY);
-      b.set(OBS.x, OBS.y, G.BLOCK);
-      b.set(I.x, I.y, G.BLACK);
       return b;
     },
     save: function (text) {
@@ -373,11 +338,11 @@ phina.globalize();
       this.target = { x: TARGET.x, y: TARGET.y };
       this.turn = "white";
       this.running = true;
+      this.moveCount = 1;
       this.frames = [];
       this.updateButtons();
       this.clearHints();
-      this.last = { x: I.x, y: I.y };
-      this.save("シチョウ発火");
+      this.save("シチョウ開始");
       this.render();
       this.next();
     },
@@ -415,16 +380,21 @@ phina.globalize();
       if (this.turn === "white") {
         r = e.stepWhite();
         if (r.status === "goal") {
-          if (r.board) this.board = r.board;
+          if (r.board) {
+            this.board = r.board;
+            this.moveCount++;
+          }
           this.last = r.move || this.last;
           this.save("成功");
-          this.finish("成功！\nピタッゴラッシチョ～オ～♪");
+          this.finish("成功！（" + this.moveCount + "手）");
+          this.showGoalEffect();
           return;
         }
         if (r.status === "white-branch" && r.board) {
           this.board = r.board;
           this.target = r.target;
           this.last = r.move;
+          this.moveCount++;
           this.clearHints();
           this.msg.text = "白が逃げました";
           this.save("白が逃げました");
@@ -473,6 +443,7 @@ phina.globalize();
         this.target = r.target;
         this.turn = "white";
         this.last = r.move;
+        this.moveCount++;
         this.save("黒がアタリ");
         this.msg.text = "黒がアタリ";
       }
@@ -501,6 +472,15 @@ phina.globalize();
           "branch",
         );
       }
+    },
+    showGoalEffect: function () {
+      // 完成した盤面を隠さず、成功メッセージだけを軽く弾ませる。
+      this.msg.tweener.clear();
+      this.msg.scaleX = 1;
+      this.msg.scaleY = 1;
+      this.msg.tweener
+        .to({ scaleX: 1.28, scaleY: 1.28 }, 140, "easeOutBack")
+        .to({ scaleX: 1.0, scaleY: 1.0 }, 220, "easeOutQuad");
     },
     finish: function (text, hintType) {
       this.running = false;
@@ -567,7 +547,7 @@ phina.globalize();
       this.clearHints();
       this.last = null;
       this.msg.text =
-        "空点タップ：白 → 黒 → 空\n青い × を避けて、右上の「ピ」へ";
+        "空点タップ：白 → 黒 → 空\n石を置いて、右下の「ピ」へ";
       this.render();
       this.updateButtons();
     },
