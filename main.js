@@ -98,10 +98,13 @@ phina.globalize();
       this.captureMoves = [];
       this.captureStones = [];
       this.last = null;
+      this.tutorialStep = 1;
+      this.tutorialActive = true;
+      this.tutorialObjects = [];
       this.base = DisplayElement().addChildTo(this);
       this.drawBase();
       this.msg = Label({
-        text: "空点タップ：白 → 黒 → 空\n石を置いて、右下の「ピ」へ",
+        text: "",
         fontSize: 30,
         fill: "#fff",
         lineHeight: 1.35,
@@ -112,16 +115,92 @@ phina.globalize();
       this.resetButton = btn(this, 360, BY, 170, "全消去", "#607d8b", () => this.reset());
       this.replayButton = btn(this, 570, BY, 170, "再生", "#1976d2", () => this.replay());
       this.updateButtons();
-      this.onpointstart = (e) => this.tap(e.pointer.x, e.pointer.y);
+      this.onpointstart = (e) => {
+        if (this.tutorialActive) {
+          this.nextTutorial();
+          return;
+        }
+        this.tap(e.pointer.x, e.pointer.y);
+      };
       this.render();
+      this.showTutorialStep();
+    },
+    clearTutorial: function () {
+      this.tutorialObjects.forEach((o) => o.remove());
+      this.tutorialObjects = [];
+    },
+    addTutorial: function (o) {
+      this.tutorialObjects.push(o);
+      return o;
+    },
+    addTutorialShade: function (x, y, width, height, alpha) {
+      if (width <= 0 || height <= 0) return;
+      var shade = RectangleShape({ width: width, height: height, fill: "#000", stroke: "transparent" })
+        .setPosition(x, y).addChildTo(this);
+      shade.alpha = alpha;
+      this.addTutorial(shade);
+    },
+    addSpotlightCurtains: function (holeX, holeY, holeWidth, holeHeight) {
+      var boardLeft = L - 28, boardTop = T - 28;
+      var boardRight = L + BP + 28, boardBottom = T + BP + 28;
+      var holeLeft = Math.max(boardLeft, holeX - holeWidth / 2);
+      var holeTop = Math.max(boardTop, holeY - holeHeight / 2);
+      var holeRight = Math.min(boardRight, holeX + holeWidth / 2);
+      var holeBottom = Math.min(boardBottom, holeY + holeHeight / 2);
+      var alpha = 0.5;
+      this.addTutorialShade((boardLeft + boardRight) / 2, (boardTop + holeTop) / 2, boardRight - boardLeft, holeTop - boardTop, alpha);
+      this.addTutorialShade((boardLeft + boardRight) / 2, (holeBottom + boardBottom) / 2, boardRight - boardLeft, boardBottom - holeBottom, alpha);
+      this.addTutorialShade((boardLeft + holeLeft) / 2, (holeTop + holeBottom) / 2, holeLeft - boardLeft, holeBottom - holeTop, alpha);
+      this.addTutorialShade((holeRight + boardRight) / 2, (holeTop + holeBottom) / 2, boardRight - holeRight, holeBottom - holeTop, alpha);
+      return { width: holeRight - holeLeft, height: holeBottom - holeTop, centerX: (holeLeft + holeRight) / 2, centerY: (holeTop + holeBottom) / 2 };
+    },
+    showTutorialStep: function () {
+      this.clearTutorial();
+      if (!this.tutorialActive) return;
+      var text = "", textX = W / 2, textY = T + BP / 2, hole = null;
+      if (this.tutorialStep === 1) {
+        var startP = pos(TARGET.x, TARGET.y);
+        hole = this.addSpotlightCurtains(startP.x - C * 0.45, startP.y, C * 3.25, C * 3.2);
+        text = "1/3\nここからシチョウがスタート！\n白が逃げます";
+        textX = W / 2 + 55; textY = T + BP - 175;
+      } else if (this.tutorialStep === 2) {
+        var goalP = pos(GOAL.x, GOAL.y);
+        hole = this.addSpotlightCurtains(goalP.x, goalP.y, C * 2.2, C * 2.2);
+        text = "2/3\n白が「ピ」まで来たらゴール！";
+        textY = T + BP - 135;
+      } else {
+        text = "3/3\n石を置いて、\n白を「ピ」へ導こう！";
+      }
+      if (hole) {
+        var frame = this.tutorialStep === 1
+          ? RectangleShape({ width: hole.width, height: hole.height, cornerRadius: 34, fill: "transparent", stroke: "#ffd54f", strokeWidth: 5 })
+          : CircleShape({ radius: Math.min(hole.width, hole.height) / 2, fill: "transparent", stroke: "#ffd54f", strokeWidth: 5 });
+        this.addTutorial(frame.setPosition(hole.centerX, hole.centerY).addChildTo(this));
+      }
+      var uiTop = T + BP + 28;
+      this.addTutorialShade(W / 2, (uiTop + H) / 2, W, H - uiTop, 0.76);
+      this.addTutorial(Label({ text: text, fontSize: 34, fill: "#fff", fontWeight: "bold", lineHeight: 1.35, stroke: "rgba(0,0,0,0.68)", strokeWidth: 6, align: "center" }).setPosition(textX, textY).addChildTo(this));
+      this.addTutorial(Label({ text: this.tutorialStep < 3 ? "タップして次へ" : "タップしてはじめる", fontSize: 22, fill: "rgba(255,255,255,0.66)", fontWeight: "bold" }).setPosition(W / 2, H - 450).addChildTo(this));
+    },
+    nextTutorial: function () {
+      if (!this.tutorialActive) return;
+      if (this.tutorialStep < 3) {
+        this.tutorialStep += 1;
+        this.showTutorialStep();
+        return;
+      }
+      this.tutorialActive = false;
+      this.clearTutorial();
+      this.msg.text = "空点タップ：白 → 黒 → 空";
+      this.updateButtons();
     },
     updateButtons: function () {
       if (!this.startButton || !this.replayButton) return;
 
-      var editing = this.canStart && !this.running && !this.replaying;
-      var canEditAgain = !this.canStart && !this.running && !this.replaying && !!this.editBoard;
+      var editing = !this.tutorialActive && this.canStart && !this.running && !this.replaying;
+      var canEditAgain = !this.tutorialActive && !this.canStart && !this.running && !this.replaying && !!this.editBoard;
       var primaryEnabled = editing || canEditAgain;
-      var replayEnabled = !this.running && this.frames.length > 0;
+      var replayEnabled = !this.tutorialActive && !this.running && this.frames.length > 0;
 
       this.startButton.fill = primaryEnabled ? "#ef6c00" : "#777777";
       this.startButton.alpha = primaryEnabled ? 1.0 : 0.55;
@@ -580,7 +659,7 @@ phina.globalize();
       this.clearHints();
       this.last = null;
       this.msg.text =
-        "空点タップ：白 → 黒 → 空\n石を置いて、右下の「ピ」へ";
+        "空点タップ：白 → 黒 → 空";
       this.render();
       this.updateButtons();
     },
