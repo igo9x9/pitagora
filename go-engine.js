@@ -137,10 +137,12 @@
     hasObstacleLiberty(b, g) {
       return !!(g && g.liberties.some((l) => b.get(l.x, l.y) === BLOCK));
     }
-    whiteEscape(b, t) {
+    whiteEscape(b, t, checkGoal) {
+      // 黒の内部読みでは、ゲーム固有のゴール情報を使わない。
+      if (checkGoal === undefined) checkGoal = true;
       var g = this.targetGroup(b, t);
       if (!g) return { status: "captured" };
-      if (this.containsGoal(g)) return { status: "goal" };
+      if (checkGoal && this.containsGoal(g)) return { status: "goal" };
       /* 白の選択肢は実際に着手できる気だけで判定する。 */ var pl =
           this.playable(b, g),
         escape = pl.length === 1 ? pl[0] : null,
@@ -160,7 +162,7 @@
       if (!r) return { status: "illegal" };
       var eg = r.board.groupAt(m.x, m.y),
         next = this.playable(r.board, eg);
-      if (this.containsGoal(eg))
+      if (checkGoal && this.containsGoal(eg))
         return { status: "goal", move: m, board: r.board, target: m };
       if (next.length !== 2) {
         if (next.length > 2)
@@ -185,20 +187,81 @@
       }
       return { status: "ok", move: m, board: r.board, target: m };
     }
+    adjacentBlackGroupsInAtari(b, whiteGroup) {
+      var checked = Object.create(null),
+        groups = [];
+      if (!whiteGroup) return groups;
+
+      for (var ws of whiteGroup.stones) {
+        for (var n of b.neighbors(ws.x, ws.y)) {
+          if (b.get(n[0], n[1]) !== BLACK) continue;
+          var bg = b.groupAt(n[0], n[1]);
+          if (!bg) continue;
+          var id = bg.stones
+            .map((stone) => key(stone.x, stone.y))
+            .sort()
+            .join("|");
+          if (checked[id]) continue;
+          checked[id] = true;
+          if (bg.liberties.length === 1) groups.push(bg);
+        }
+      }
+      return groups;
+    }
+    blackCandidateSafety(b, t) {
+      // 黒候補の直後、白の唯一の逃げ手を実際に1手進める。
+      var whiteReply = this.whiteEscape(b, t, false);
+      if (whiteReply.status === "white-can-capture") {
+        return { safe: false, reason: "white-can-capture-now" };
+      }
+
+      // 白が通常どおり逃げた後、その白の連に接する黒一団が
+      // アタリなら、その黒手はシチョウを崩す危険手として除外する。
+      if (whiteReply.status === "ok" && whiteReply.board && whiteReply.target) {
+        var escapedWhite = this.targetGroup(
+          whiteReply.board,
+          whiteReply.target,
+        );
+        var blackAtariGroups = this.adjacentBlackGroupsInAtari(
+          whiteReply.board,
+          escapedWhite,
+        );
+        if (blackAtariGroups.length > 0) {
+          return {
+            safe: false,
+            reason: "black-in-atari-after-white-escape",
+            groups: blackAtariGroups,
+          };
+        }
+      }
+
+      return { safe: true, whiteReply: whiteReply };
+    }
     blackCandidates(b, t) {
       var g = this.targetGroup(b, t),
         out = [];
       if (!g) return out;
+
       for (var m of this.playable(b, g)) {
         var r = b.play(m.x, m.y, BLACK);
         if (!r) continue;
         var ng = this.targetGroup(r.board, t);
-        /* 黒は障害物を黒石代わりに利用できない。障害物を含む全ての気が1つで、かつその気に実際に着手できる場合だけアタリ。 */ if (
-          ng &&
-          ng.liberties.length === 1 &&
-          this.playable(r.board, ng).length === 1
-        )
-          out.push({ move: m, board: r.board, target: t });
+
+        // 黒を置いた結果、白が本当にアタリになる手だけを候補にする。
+        if (!ng || ng.liberties.length !== 1) continue;
+        if (this.playable(r.board, ng).length !== 1) continue;
+
+        // 直後だけでなく、白が唯一の逃げ手を打った後も検査する。
+        var safety = this.blackCandidateSafety(r.board, t);
+        if (!safety.safe) {
+          console.debug("黒候補を除外", {
+            move: m,
+            reason: safety.reason,
+          });
+          continue;
+        }
+
+        out.push({ move: m, board: r.board, target: t });
       }
       return out;
     }
@@ -243,7 +306,6 @@
         readLimit: 15,
         cycle: 10,
         illegal: 5,
-        goal: 0,
       };
       return r[o] === undefined ? -1 : r[o];
     }
@@ -263,10 +325,8 @@
       np[k] = true;
       var ans;
       if (turn === "white") {
-        var w = this.whiteEscape(b, t);
-        if (w.status === "goal")
-          ans = { outcome: "goal", plies: w.move ? 1 : 0 };
-        else if (w.status === "captured")
+        var w = this.whiteEscape(b, t, false);
+        if (w.status === "captured")
           ans = { outcome: "captured", plies: 0 };
         else if (w.status === "white-branch")
           ans = { outcome: "whiteBranch", plies: 0 };
@@ -306,7 +366,7 @@
     }
     direction(c, inc) {
       if (!inc.length) return 0;
-      var w = this.whiteEscape(c.board, c.target);
+      var w = this.whiteEscape(c.board, c.target, false);
       if (!w.move) return 0;
       var dx = w.move.x - c.target.x,
         dy = w.move.y - c.target.y,
@@ -343,7 +403,7 @@
       };
     }
     stepWhite() {
-      return this.whiteEscape(this.board, this.target);
+      return this.whiteEscape(this.board, this.target, true);
     }
   }
   global.GoLogic = {
