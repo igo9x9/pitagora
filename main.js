@@ -59,20 +59,22 @@ phina.globalize();
       this.superInit({ width: W, height: H });
       this.backgroundColor = "#00B050";
 
-    // タイトル画像
-    var titleLogo = Sprite("titleLogo")
-      .addChildTo(this)
-      .setPosition(W / 2, 400);
+      // タイトル画像
+      var titleLogo = Sprite("titleLogo")
+        .addChildTo(this)
+        .setPosition(W / 2, 400);
 
-    var targetWidth = 600;
-    var scale = targetWidth / titleLogo.width;
-    titleLogo.setScale(scale);
+      var targetWidth = 600;
+      var scale = targetWidth / titleLogo.width;
+      titleLogo.setScale(scale);
 
-    Sprite("neko1").addChildTo(this).setPosition(W / 2, 630);
-      
+      Sprite("neko1")
+        .addChildTo(this)
+        .setPosition(W / 2, 630);
+
       btn(this, W / 2, 755, 330, "あそぶ", "#ef6c00", () => this.exit("main"));
       Label({
-        text: "シチョウで、白石をゴールまで導こう！\n注意：白の逃げ道が複数ある場合は失敗です",
+        text: "シチョウで、白石をゴールまでみちびくニャ！\n白の逃げ道が2つ以上になったら失敗だニャ",
         fontSize: 28,
         fill: "#fff",
         lineHeight: 1.5,
@@ -117,12 +119,29 @@ phina.globalize();
         .setPosition(400, MY)
         .addChildTo(this);
       this.catSprite = Sprite("neko1").addChildTo(this).setPosition(82, MY);
-      this.startButton = btn(this, 150, BY, 190, "スタート", "#ef6c00", () => this.primaryAction());
-      this.resetButton = btn(this, 360, BY, 170, "全消去", "#607d8b", () => this.reset());
-      this.replayButton = btn(this, 570, BY, 170, "再生", "#1976d2", () => this.replay());
-      this.prevReplayButton = btn(this, 255, BY + 92, 84, "◀", "#455a64", () => this.stepReplay(-1));
-      this.nextReplayButton = btn(this, 465, BY + 92, 84, "▶", "#455a64", () => this.stepReplay(1));
-      this.replayCounter = Label({ text: "0 / 0", fontSize: 24, fill: "#fff", fontWeight: "bold" }).setPosition(360, BY + 92).addChildTo(this);
+      this.startButton = btn(this, 150, BY, 190, "スタート", "#ef6c00", () =>
+        this.primaryAction(),
+      );
+      this.resetButton = btn(this, 360, BY, 170, "全消去", "#607d8b", () =>
+        this.reset(),
+      );
+      this.replayButton = btn(this, 570, BY, 170, "再生", "#1976d2", () =>
+        this.replay(),
+      );
+      this.prevReplayButton = btn(this, 255, BY + 92, 84, "◀", "#455a64", () =>
+        this.stepReplay(-1),
+      );
+      this.nextReplayButton = btn(this, 465, BY + 92, 84, "▶", "#455a64", () =>
+        this.stepReplay(1),
+      );
+      this.replayCounter = Label({
+        text: "0 / 0",
+        fontSize: 24,
+        fill: "#fff",
+        fontWeight: "bold",
+      })
+        .setPosition(360, BY + 92)
+        .addChildTo(this);
       this.setReplayNavVisible(false);
       this.updateButtons();
       this.onpointstart = (e) => {
@@ -144,12 +163,21 @@ phina.globalize();
     updateReplayCounter: function () {
       if (!this.replayCounter) return;
       var total = this.frames.length;
-      var current = this.replayCurrentIndex >= 0 ? this.replayCurrentIndex + 1 : 0;
+      var current =
+        this.replayCurrentIndex >= 0 ? this.replayCurrentIndex + 1 : 0;
       this.replayCounter.text = current + " / " + total;
       var prevEnabled = this.replayNavVisible && current > 1;
       var nextEnabled = this.replayNavVisible && current < total;
-      if (this.prevReplayButton) { this.prevReplayButton.fill = prevEnabled ? "#455a64" : "#777777"; this.prevReplayButton.alpha = prevEnabled ? 1 : 0.45; this.prevReplayButton.setInteractive(prevEnabled); }
-      if (this.nextReplayButton) { this.nextReplayButton.fill = nextEnabled ? "#455a64" : "#777777"; this.nextReplayButton.alpha = nextEnabled ? 1 : 0.45; this.nextReplayButton.setInteractive(nextEnabled); }
+      if (this.prevReplayButton) {
+        this.prevReplayButton.fill = prevEnabled ? "#455a64" : "#777777";
+        this.prevReplayButton.alpha = prevEnabled ? 1 : 0.45;
+        this.prevReplayButton.setInteractive(prevEnabled);
+      }
+      if (this.nextReplayButton) {
+        this.nextReplayButton.fill = nextEnabled ? "#455a64" : "#777777";
+        this.nextReplayButton.alpha = nextEnabled ? 1 : 0.45;
+        this.nextReplayButton.setInteractive(nextEnabled);
+      }
     },
     showReplayFrame: function (index) {
       if (!this.frames.length) return;
@@ -157,19 +185,35 @@ phina.globalize();
       var f = this.frames[index];
       this.replayCurrentIndex = index;
       this.fi = index + 1;
-      this.board = new G.GoBoard(S, f.cells); this.last = f.last;
-      this.branchMarkers = f.branchMarkers || []; this.captureMoves = f.captureMoves || []; this.captureStones = f.captureStones || [];
-      this.msg.text = "再生中：" + f.text;
+      this.board = new G.GoBoard(S, f.cells);
+      this.last = f.last;
+      this.branchMarkers = f.branchMarkers || [];
+      this.captureMoves = f.captureMoves || [];
+      this.captureStones = f.captureStones || [];
+      this.msg.text = f.text;
       if (f.text === "成功") this.showHappyCat();
-      else if (index === this.frames.length - 1 && f.text !== "成功") this.showSadCat();
-      else { var n = 0; for (var i=0;i<=index;i++){var t=this.frames[i].text;if(t === "白が逃げました" || t === "黒がアタリ") n++;} this.catFrame = n % 2 === 0 ? 1 : 2; this.setCat(this.catFrame === 1 ? "neko1" : "neko2"); }
-      this.render(); this.updateReplayCounter();
+      else if (index === this.frames.length - 1 && f.text !== "成功")
+        this.showSadCat();
+      else {
+        var n = 0;
+        for (var i = 0; i <= index; i++) {
+          var t = this.frames[i].text;
+          if (t === "白が逃げるニャ" || t === "黒がアタリだニャ") n++;
+        }
+        this.catFrame = n % 2 === 0 ? 1 : 2;
+        this.setCat(this.catFrame === 1 ? "neko1" : "neko2");
+      }
+      this.render();
+      this.updateReplayCounter();
     },
     stepReplay: function (delta) {
       if (!this.frames.length || !this.replayNavVisible) return;
-      this.replaying = true; this.replayPaused = true; this.tweener.clear();
+      this.replaying = true;
+      this.replayPaused = true;
+      this.tweener.clear();
       var base = this.replayCurrentIndex >= 0 ? this.replayCurrentIndex : 0;
-      this.showReplayFrame(base + delta); this.updateButtons();
+      this.showReplayFrame(base + delta);
+      this.updateButtons();
     },
     setCat: function (name) {
       if (this.catSprite) this.catSprite.image = name;
@@ -182,8 +226,12 @@ phina.globalize();
       this.catFrame = this.catFrame === 1 ? 2 : 1;
       this.setCat(this.catFrame === 1 ? "neko1" : "neko2");
     },
-    showHappyCat: function () { this.setCat("neko3"); },
-    showSadCat: function () { this.setCat("neko4"); },
+    showHappyCat: function () {
+      this.setCat("neko3");
+    },
+    showSadCat: function () {
+      this.setCat("neko4");
+    },
     clearTutorial: function () {
       this.tutorialObjects.forEach((o) => o.remove());
       this.tutorialObjects = [];
@@ -194,50 +242,135 @@ phina.globalize();
     },
     addTutorialShade: function (x, y, width, height, alpha) {
       if (width <= 0 || height <= 0) return;
-      var shade = RectangleShape({ width: width, height: height, fill: "#000", stroke: "transparent" })
-        .setPosition(x, y).addChildTo(this);
+      var shade = RectangleShape({
+        width: width,
+        height: height,
+        fill: "#000",
+        stroke: "transparent",
+      })
+        .setPosition(x, y)
+        .addChildTo(this);
       shade.alpha = alpha;
       this.addTutorial(shade);
     },
     addSpotlightCurtains: function (holeX, holeY, holeWidth, holeHeight) {
-      var boardLeft = L - 28, boardTop = T - 28;
-      var boardRight = L + BP + 28, boardBottom = T + BP + 28;
+      var boardLeft = L - 28,
+        boardTop = T - 28;
+      var boardRight = L + BP + 28,
+        boardBottom = T + BP + 28;
       var holeLeft = Math.max(boardLeft, holeX - holeWidth / 2);
       var holeTop = Math.max(boardTop, holeY - holeHeight / 2);
       var holeRight = Math.min(boardRight, holeX + holeWidth / 2);
       var holeBottom = Math.min(boardBottom, holeY + holeHeight / 2);
       var alpha = 0.5;
-      this.addTutorialShade((boardLeft + boardRight) / 2, (boardTop + holeTop) / 2, boardRight - boardLeft, holeTop - boardTop, alpha);
-      this.addTutorialShade((boardLeft + boardRight) / 2, (holeBottom + boardBottom) / 2, boardRight - boardLeft, boardBottom - holeBottom, alpha);
-      this.addTutorialShade((boardLeft + holeLeft) / 2, (holeTop + holeBottom) / 2, holeLeft - boardLeft, holeBottom - holeTop, alpha);
-      this.addTutorialShade((holeRight + boardRight) / 2, (holeTop + holeBottom) / 2, boardRight - holeRight, holeBottom - holeTop, alpha);
-      return { width: holeRight - holeLeft, height: holeBottom - holeTop, centerX: (holeLeft + holeRight) / 2, centerY: (holeTop + holeBottom) / 2 };
+      this.addTutorialShade(
+        (boardLeft + boardRight) / 2,
+        (boardTop + holeTop) / 2,
+        boardRight - boardLeft,
+        holeTop - boardTop,
+        alpha,
+      );
+      this.addTutorialShade(
+        (boardLeft + boardRight) / 2,
+        (holeBottom + boardBottom) / 2,
+        boardRight - boardLeft,
+        boardBottom - holeBottom,
+        alpha,
+      );
+      this.addTutorialShade(
+        (boardLeft + holeLeft) / 2,
+        (holeTop + holeBottom) / 2,
+        holeLeft - boardLeft,
+        holeBottom - holeTop,
+        alpha,
+      );
+      this.addTutorialShade(
+        (holeRight + boardRight) / 2,
+        (holeTop + holeBottom) / 2,
+        boardRight - holeRight,
+        holeBottom - holeTop,
+        alpha,
+      );
+      return {
+        width: holeRight - holeLeft,
+        height: holeBottom - holeTop,
+        centerX: (holeLeft + holeRight) / 2,
+        centerY: (holeTop + holeBottom) / 2,
+      };
     },
     showTutorialStep: function () {
       this.clearTutorial();
       if (!this.tutorialActive) return;
-      var text = "", textX = W / 2, textY = T + BP / 2, hole = null;
+      var text = "",
+        textX = W / 2,
+        textY = T + BP / 2,
+        hole = null;
       if (this.tutorialStep === 1) {
         var startP = pos(TARGET.x, TARGET.y);
-        hole = this.addSpotlightCurtains(startP.x - C * 0.45, startP.y, C * 3.25, C * 3.2);
-        text = "1/3\nここからシチョウがスタート！\n白が逃げます";
+        hole = this.addSpotlightCurtains(
+          startP.x - C * 0.45,
+          startP.y,
+          C * 3.25,
+          C * 3.2,
+        );
+        text = "1/3\nここからシチョウがスタートだニャ！\n白が逃げるニャ";
       } else if (this.tutorialStep === 2) {
         var goalP = pos(GOAL.x, GOAL.y);
         hole = this.addSpotlightCurtains(goalP.x, goalP.y, C * 2.2, C * 2.2);
-        text = "2/3\n白が「ピ」まで来たらゴール！";
+        text = "2/3\n白が「ピ」まで来たらゴールだニャ！";
       } else {
-        text = "3/3\n石を置いて、\n白を「ピ」へ導こう！";
+        text = "3/3\nじょうずに石を置いて、\n白を「ピ」へみちびくニャ！";
       }
       if (hole) {
-        var frame = this.tutorialStep === 1
-          ? RectangleShape({ width: hole.width, height: hole.height, cornerRadius: 34, fill: "transparent", stroke: "#ffd54f", strokeWidth: 5 })
-          : CircleShape({ radius: Math.min(hole.width, hole.height) / 2, fill: "transparent", stroke: "#ffd54f", strokeWidth: 5 });
-        this.addTutorial(frame.setPosition(hole.centerX, hole.centerY).addChildTo(this));
+        var frame =
+          this.tutorialStep === 1
+            ? RectangleShape({
+                width: hole.width,
+                height: hole.height,
+                cornerRadius: 34,
+                fill: "transparent",
+                stroke: "#ffd54f",
+                strokeWidth: 5,
+              })
+            : CircleShape({
+                radius: Math.min(hole.width, hole.height) / 2,
+                fill: "transparent",
+                stroke: "#ffd54f",
+                strokeWidth: 5,
+              });
+        this.addTutorial(
+          frame.setPosition(hole.centerX, hole.centerY).addChildTo(this),
+        );
       }
       var uiTop = T + BP + 28;
       this.addTutorialShade(W / 2, (uiTop + H) / 2, W, H - uiTop, 0.76);
-      this.addTutorial(Label({ text: text, fontSize: 34, fill: "#fff", fontWeight: "bold", lineHeight: 1.35, stroke: "rgba(0,0,0,0.68)", strokeWidth: 6, align: "center" }).setPosition(textX, textY).addChildTo(this));
-      this.addTutorial(Label({ text: this.tutorialStep < 3 ? "タップして次へ" : "タップしてはじめる", fontSize: 22, fill: "rgba(255,255,255,0.66)", fontWeight: "bold" }).setPosition(W / 2, H - 450).addChildTo(this));
+      this.addTutorial(
+        Label({
+          text: text,
+          fontSize: 34,
+          fill: "#fff",
+          fontWeight: "bold",
+          lineHeight: 1.35,
+          stroke: "rgba(0,0,0,0.68)",
+          strokeWidth: 6,
+          align: "center",
+        })
+          .setPosition(textX, textY)
+          .addChildTo(this),
+      );
+      this.addTutorial(
+        Label({
+          text:
+            this.tutorialStep < 3
+              ? "タップして次へニャ"
+              : "タップしてはじめるニャ",
+          fontSize: 22,
+          fill: "rgba(255,255,255,0.66)",
+          fontWeight: "bold",
+        })
+          .setPosition(W / 2, H - 450)
+          .addChildTo(this),
+      );
     },
     nextTutorial: function () {
       if (!this.tutorialActive) return;
@@ -248,22 +381,35 @@ phina.globalize();
       }
       this.tutorialActive = false;
       this.clearTutorial();
-      this.msg.text = "空点タップ：白 → 黒 → 空";
+      this.msg.text =
+        "空いてるところをタップするニャ\n白 → 黒 → 空 で変わるニャ";
       this.updateButtons();
     },
     updateButtons: function () {
       if (!this.startButton || !this.replayButton) return;
 
-      var editing = !this.tutorialActive && this.canStart && !this.running && !this.replaying;
-      var canEditAgain = !this.tutorialActive && !this.canStart && !this.running && !this.replaying && !!this.editBoard;
+      var editing =
+        !this.tutorialActive &&
+        this.canStart &&
+        !this.running &&
+        !this.replaying;
+      var canEditAgain =
+        !this.tutorialActive &&
+        !this.canStart &&
+        !this.running &&
+        !this.replaying &&
+        !!this.editBoard;
       var primaryEnabled = editing || canEditAgain;
-      var replayEnabled = !this.tutorialActive && !this.running && this.frames.length > 0;
+      var replayEnabled =
+        !this.tutorialActive && !this.running && this.frames.length > 0;
 
       this.startButton.fill = primaryEnabled ? "#ef6c00" : "#777777";
       this.startButton.alpha = primaryEnabled ? 1.0 : 0.55;
       this.startButton.setInteractive(primaryEnabled);
       if (this.startButton.buttonLabel) {
-        this.startButton.buttonLabel.text = canEditAgain ? "手直し" : "スタート";
+        this.startButton.buttonLabel.text = canEditAgain
+          ? "手直し"
+          : "スタート";
       }
 
       this.replayButton.fill = replayEnabled ? "#1976d2" : "#777777";
@@ -271,7 +417,9 @@ phina.globalize();
       this.replayButton.setInteractive(replayEnabled);
       if (this.replayButton.buttonLabel) {
         this.replayButton.buttonLabel.text = this.replaying
-          ? (this.replayPaused ? "再開" : "一時停止")
+          ? this.replayPaused
+            ? "再開"
+            : "一時停止"
           : "再生";
       }
       this.updateReplayCounter();
@@ -296,7 +444,7 @@ phina.globalize();
       this.clearHints();
       this.last = null;
       this.resetCat();
-      this.msg.text = "石を手直しして、もう一度スタート";
+      this.msg.text = "石を手直しして、もう一回ニャ！";
       this.render();
       this.updateButtons();
     },
@@ -455,6 +603,8 @@ phina.globalize();
     },
     tap: function (px, py) {
       if (
+        !this.canStart ||
+        this.tutorialActive ||
         this.running ||
         this.replaying ||
         py < T - C / 2 ||
@@ -515,7 +665,7 @@ phina.globalize();
       this.resetCat();
       this.updateButtons();
       this.clearHints();
-      this.save("シチョウ開始");
+      this.save("シチョウ、スタートだニャ！");
       this.render();
       this.next();
     },
@@ -543,8 +693,8 @@ phina.globalize();
           }
         }
       }
-      this.save("白が黒石を取れる");
-      this.finish("失敗：赤枠の黒石を取る手があります", "capture");
+      this.save("白が黒石を取れるニャ");
+      this.finish("赤枠の黒石も取れちゃうニャ！", "capture");
     },
     advance: function () {
       if (!this.running) return;
@@ -559,7 +709,7 @@ phina.globalize();
           }
           this.last = r.move || this.last;
           this.save("成功");
-          this.finish("成功！（" + this.moveCount + "手）");
+          this.finish("ゴールだニャ！（" + this.moveCount + "手）");
           this.showGoalEffect();
           return;
         }
@@ -570,8 +720,8 @@ phina.globalize();
           this.moveCount++;
           this.clearHints();
           this.toggleCat();
-          this.msg.text = "白が逃げました";
-          this.save("白が逃げました");
+          this.msg.text = "白が逃げるニャ";
+          this.save("白が逃げるニャ");
           this.render();
           this.tweener
             .clear()
@@ -582,8 +732,8 @@ phina.globalize();
         if (r.status === "white-branch") {
           this.clearHints();
           this.branchMarkers = r.liberties || [];
-          this.save("白の逃げ道が複数");
-          this.finish("失敗：白の逃げ道が" + r.count + "つあります", "branch");
+          this.save("白の逃げ道がいっぱいだニャ");
+          this.finish("白の逃げ道が" + r.count + "つあるニャ！", "branch");
           return;
         }
         if (r.status === "white-can-capture") {
@@ -593,12 +743,12 @@ phina.globalize();
         if (r.status !== "ok") {
           var m =
             {
-              obstacle: "障害物でシチョウが成立しなくなりました",
-              "no-escape": "白石が逃げられません",
-              captured: "白石が逃げられません",
-              illegal: "白の着手ができません",
-            }[r.status] || "白の進行が止まりました";
-          this.finish("失敗：" + m);
+              obstacle: "シチョウが続かないニャ",
+              "no-escape": "白はもう逃げられないニャ",
+              captured: "白はもう逃げられないニャ",
+              illegal: "白はそこに打てないニャ",
+            }[r.status] || "白が止まったニャ";
+          this.finish(m);
           return;
         }
         this.board = r.board;
@@ -607,12 +757,12 @@ phina.globalize();
         this.last = r.move;
         this.moveCount++;
         this.toggleCat();
-        this.save("白が逃げました");
-        this.msg.text = "白が逃げました";
+        this.save("白が逃げるニャ");
+        this.msg.text = "白が逃げるニャ";
       } else {
         r = e.chooseBlack();
         if (r.status !== "ok") {
-          this.finish("失敗：黒がアタリを継続できません");
+          this.finish("黒はアタリを続けられないニャ");
           return;
         }
         this.board = r.board;
@@ -621,8 +771,8 @@ phina.globalize();
         this.last = r.move;
         this.moveCount++;
         this.toggleCat();
-        this.save("黒がアタリ");
-        this.msg.text = "黒がアタリ";
+        this.save("黒がアタリだニャ");
+        this.msg.text = "黒がアタリだニャ";
       }
       this.render();
       this.next();
@@ -635,17 +785,17 @@ phina.globalize();
         this.board = x.board;
         this.last = x.move;
         this.branchMarkers = x.liberties;
-        this.save("黒が追い、逃げ道を表示");
+        this.save("黒が追ったニャ");
         this.finish(
-          "失敗：白の逃げ道が" + x.liberties.length + "つあります",
+          "白の逃げ道が" + x.liberties.length + "つあるニャ！",
           "branch",
         );
       } else {
         var g = this.board.groupAt(this.target.x, this.target.y);
         this.branchMarkers = this.board.playableLiberties(g);
-        this.save("逃げ道を表示");
+        this.save("逃げ道はここだニャ");
         this.finish(
-          "失敗：白の逃げ道が" + this.branchMarkers.length + "つあります",
+          "白の逃げ道が" + this.branchMarkers.length + "つあるニャ！",
           "branch",
         );
       }
@@ -683,7 +833,7 @@ phina.globalize();
       if (!this.replayPaused) {
         this.replayPaused = true;
         this.tweener.clear();
-        this.msg.text = "一時停止中";
+        this.msg.text = "ちょっと待つニャ";
         this.updateButtons();
         return;
       }
@@ -693,9 +843,18 @@ phina.globalize();
     },
     playFrame: function () {
       if (!this.replaying || this.replayPaused) return;
-      if (this.fi >= this.frames.length) { this.replaying = false; this.replayPaused = false; this.msg.text = "再生終了"; this.updateButtons(); return; }
+      if (this.fi >= this.frames.length) {
+        this.replaying = false;
+        this.replayPaused = false;
+        this.msg.text = "再生おわりだニャ";
+        this.updateButtons();
+        return;
+      }
       this.showReplayFrame(this.fi);
-      this.tweener.clear().wait(150).call(() => this.playFrame());
+      this.tweener
+        .clear()
+        .wait(150)
+        .call(() => this.playFrame());
     },
     reset: function () {
       this.tweener.clear();
@@ -713,22 +872,26 @@ phina.globalize();
       this.last = null;
       this.resetCat();
       this.msg.text =
-        "空点タップ：白 → 黒 → 空";
+        "空いてるところをタップするニャ\n白 → 黒 → 空 で変わるニャ";
       this.render();
       this.updateButtons();
     },
   });
   phina.main(function () {
-    GameApp({ startLabel: "title", width: W, height: H, fit: true,
-    assets: {
-      image: {
-        titleLogo: "title.png",
-        neko1: "neko1.png",
-        neko2: "neko2.png",
-        neko3: "neko3.png",
-        neko4: "neko4.png",
+    GameApp({
+      startLabel: "title",
+      width: W,
+      height: H,
+      fit: true,
+      assets: {
+        image: {
+          titleLogo: "title.png",
+          neko1: "neko1.png",
+          neko2: "neko2.png",
+          neko3: "neko3.png",
+          neko4: "neko4.png",
+        },
       },
-    },
     }).run();
   });
 })();
