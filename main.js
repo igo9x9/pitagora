@@ -104,6 +104,8 @@ phina.globalize();
       this.tutorialStep = 1;
       this.tutorialActive = true;
       this.tutorialObjects = [];
+      this.replayNavVisible = false;
+      this.replayCurrentIndex = -1;
       this.base = DisplayElement().addChildTo(this);
       this.drawBase();
       this.msg = Label({
@@ -118,6 +120,10 @@ phina.globalize();
       this.startButton = btn(this, 150, BY, 190, "スタート", "#ef6c00", () => this.primaryAction());
       this.resetButton = btn(this, 360, BY, 170, "全消去", "#607d8b", () => this.reset());
       this.replayButton = btn(this, 570, BY, 170, "再生", "#1976d2", () => this.replay());
+      this.prevReplayButton = btn(this, 255, BY + 92, 84, "◀", "#455a64", () => this.stepReplay(-1));
+      this.nextReplayButton = btn(this, 465, BY + 92, 84, "▶", "#455a64", () => this.stepReplay(1));
+      this.replayCounter = Label({ text: "0 / 0", fontSize: 24, fill: "#fff", fontWeight: "bold" }).setPosition(360, BY + 92).addChildTo(this);
+      this.setReplayNavVisible(false);
       this.updateButtons();
       this.onpointstart = (e) => {
         if (this.tutorialActive) {
@@ -128,6 +134,42 @@ phina.globalize();
       };
       this.render();
       this.showTutorialStep();
+    },
+    setReplayNavVisible: function (visible) {
+      this.replayNavVisible = visible;
+      if (this.prevReplayButton) this.prevReplayButton.visible = visible;
+      if (this.nextReplayButton) this.nextReplayButton.visible = visible;
+      if (this.replayCounter) this.replayCounter.visible = visible;
+    },
+    updateReplayCounter: function () {
+      if (!this.replayCounter) return;
+      var total = this.frames.length;
+      var current = this.replayCurrentIndex >= 0 ? this.replayCurrentIndex + 1 : 0;
+      this.replayCounter.text = current + " / " + total;
+      var prevEnabled = this.replayNavVisible && current > 1;
+      var nextEnabled = this.replayNavVisible && current < total;
+      if (this.prevReplayButton) { this.prevReplayButton.fill = prevEnabled ? "#455a64" : "#777777"; this.prevReplayButton.alpha = prevEnabled ? 1 : 0.45; this.prevReplayButton.setInteractive(prevEnabled); }
+      if (this.nextReplayButton) { this.nextReplayButton.fill = nextEnabled ? "#455a64" : "#777777"; this.nextReplayButton.alpha = nextEnabled ? 1 : 0.45; this.nextReplayButton.setInteractive(nextEnabled); }
+    },
+    showReplayFrame: function (index) {
+      if (!this.frames.length) return;
+      index = Math.max(0, Math.min(this.frames.length - 1, index));
+      var f = this.frames[index];
+      this.replayCurrentIndex = index;
+      this.fi = index + 1;
+      this.board = new G.GoBoard(S, f.cells); this.last = f.last;
+      this.branchMarkers = f.branchMarkers || []; this.captureMoves = f.captureMoves || []; this.captureStones = f.captureStones || [];
+      this.msg.text = "再生中：" + f.text;
+      if (f.text === "成功") this.showHappyCat();
+      else if (index === this.frames.length - 1 && f.text !== "成功") this.showSadCat();
+      else { var n = 0; for (var i=0;i<=index;i++){var t=this.frames[i].text;if(t === "白が逃げました" || t === "黒がアタリ") n++;} this.catFrame = n % 2 === 0 ? 1 : 2; this.setCat(this.catFrame === 1 ? "neko1" : "neko2"); }
+      this.render(); this.updateReplayCounter();
+    },
+    stepReplay: function (delta) {
+      if (!this.frames.length || !this.replayNavVisible) return;
+      this.replaying = true; this.replayPaused = true; this.tweener.clear();
+      var base = this.replayCurrentIndex >= 0 ? this.replayCurrentIndex : 0;
+      this.showReplayFrame(base + delta); this.updateButtons();
     },
     setCat: function (name) {
       if (this.catSprite) this.catSprite.image = name;
@@ -232,6 +274,7 @@ phina.globalize();
           ? (this.replayPaused ? "再開" : "一時停止")
           : "再生";
       }
+      this.updateReplayCounter();
     },
     primaryAction: function () {
       if (this.canStart) this.start();
@@ -248,6 +291,8 @@ phina.globalize();
       this.replayPaused = false;
       this.canStart = true;
       this.frames = [];
+      this.replayCurrentIndex = -1;
+      this.setReplayNavVisible(false);
       this.clearHints();
       this.last = null;
       this.resetCat();
@@ -628,6 +673,8 @@ phina.globalize();
         this.replaying = true;
         this.replayPaused = false;
         this.fi = 0;
+        this.replayCurrentIndex = -1;
+        this.setReplayNavVisible(true);
         this.resetCat();
         this.updateButtons();
         this.playFrame();
@@ -646,28 +693,9 @@ phina.globalize();
     },
     playFrame: function () {
       if (!this.replaying || this.replayPaused) return;
-      if (this.fi >= this.frames.length) {
-        this.replaying = false;
-        this.replayPaused = false;
-        this.msg.text = "再生終了";
-        this.updateButtons();
-        return;
-      }
-      var f = this.frames[this.fi++];
-      this.board = new G.GoBoard(S, f.cells);
-      this.last = f.last;
-      this.branchMarkers = f.branchMarkers || [];
-      this.captureMoves = f.captureMoves || [];
-      this.captureStones = f.captureStones || [];
-      this.msg.text = "再生中：" + f.text;
-      if (f.text === "成功") this.showHappyCat();
-      else if (f.text === "白が逃げました" || f.text === "黒がアタリ") this.toggleCat();
-      else if (this.fi >= this.frames.length) this.showSadCat();
-      this.render();
-      this.tweener
-        .clear()
-        .wait(150)
-        .call(() => this.playFrame());
+      if (this.fi >= this.frames.length) { this.replaying = false; this.replayPaused = false; this.msg.text = "再生終了"; this.updateButtons(); return; }
+      this.showReplayFrame(this.fi);
+      this.tweener.clear().wait(150).call(() => this.playFrame());
     },
     reset: function () {
       this.tweener.clear();
@@ -679,6 +707,8 @@ phina.globalize();
       this.canStart = true;
       this.editBoard = null;
       this.frames = [];
+      this.replayCurrentIndex = -1;
+      this.setReplayNavVisible(false);
       this.clearHints();
       this.last = null;
       this.resetCat();
