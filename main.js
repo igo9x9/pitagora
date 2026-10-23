@@ -116,7 +116,7 @@ phina.globalize();
         fill: "#fff",
         lineHeight: 1.35,
       })
-        .setPosition(400, MY)
+        .setPosition(380, MY)
         .addChildTo(this);
       this.catSprite = Sprite("neko1").addChildTo(this).setPosition(82, MY);
       this.startButton = btn(this, 150, BY, 190, "スタート", "#ef6c00", () =>
@@ -191,14 +191,14 @@ phina.globalize();
       this.captureMoves = f.captureMoves || [];
       this.captureStones = f.captureStones || [];
       this.msg.text = f.text;
-      if (f.text === "成功") this.showHappyCat();
-      else if (index === this.frames.length - 1 && f.text !== "成功")
+      if (f.text === "成功だニャ") this.showHappyCat();
+      else if (index === this.frames.length - 1 && f.text !== "成功だニャ")
         this.showSadCat();
       else {
         var n = 0;
         for (var i = 0; i <= index; i++) {
           var t = this.frames[i].text;
-          if (t === "白が逃げるニャ" || t === "黒がアタリだニャ") n++;
+          if (t === "白が逃げるニャ" || t === "黒が追うニャ") n++;
         }
         this.catFrame = n % 2 === 0 ? 1 : 2;
         this.setCat(this.catFrame === 1 ? "neko1" : "neko2");
@@ -706,7 +706,7 @@ phina.globalize();
             this.moveCount++;
           }
           this.last = r.move || this.last;
-          this.save("成功");
+          this.save("成功だニャ");
           this.finish("ゴールだニャ！（" + this.moveCount + "手）");
           this.showGoalEffect();
           return;
@@ -769,8 +769,8 @@ phina.globalize();
         this.last = r.move;
         this.moveCount++;
         this.toggleCat();
-        this.save("黒がアタリだニャ");
-        this.msg.text = "黒がアタリだニャ";
+        this.save("黒が追うニャ");
+        this.msg.text = "黒が追うニャ";
       }
       this.render();
       this.next();
@@ -809,10 +809,22 @@ phina.globalize();
     },
     finish: function (text, hintType) {
       this.running = false;
-      if (text.indexOf("成功") === 0) this.showHappyCat();
-      else this.showSadCat();
+      if (text.indexOf("成功") === 0 || text.indexOf("ゴール") === 0)
+        this.showHappyCat();
+      else
+        this.showSadCat();
       this.msg.text = text;
       this.render();
+
+      // 成功・失敗が出た直後から、最終フレームを現在位置として
+      // 一手戻し・一手送りUIを使えるようにする。
+      if (this.frames.length > 0) {
+        this.replayCurrentIndex = this.frames.length - 1;
+        this.fi = this.frames.length;
+        this.setReplayNavVisible(true);
+        this.updateReplayCounter();
+      }
+
       this.updateButtons();
     },
     replay: function () {
