@@ -34,8 +34,8 @@ phina.globalize();
       height: 70,
       cornerRadius: 16,
       fill: color,
-      stroke: "#fff",
-      strokeWidth: 6,
+      stroke: "#000",
+      strokeWidth: 12,
     })
       .setPosition(x, y)
       .addChildTo(sc)
@@ -74,7 +74,7 @@ phina.globalize();
 
       btn(this, W / 2, 755, 330, "あそぶ", "#ef6c00", () => this.exit("main"));
       Label({
-        text: "シチョウで、白石をゴールまでみちびくニャ！\n白の逃げ道が2つ以上になったら失敗だニャ",
+        text: "シチョウで、白石をゴールまでみちびくニャ！\n白の逃げ道が2つ以上になったら失敗ニャ",
         fontSize: 28,
         fill: "#fff",
         lineHeight: 1.5,
@@ -313,13 +313,13 @@ phina.globalize();
           C * 3.25,
           C * 3.2,
         );
-        text = "1/3\nここからシチョウがスタートだニャ！\n白が逃げるニャ";
+        text = "ここからシチョウがスタートだニャ！\n白が逃げるニャ";
       } else if (this.tutorialStep === 2) {
         var goalP = pos(GOAL.x, GOAL.y);
         hole = this.addSpotlightCurtains(goalP.x, goalP.y, C * 2.2, C * 2.2);
-        text = "2/3\n白が「ピ」まで来たらゴールだニャ！";
+        text = "白が「ピ」まで来たらゴールだニャ！";
       } else {
-        text = "3/3\nじょうずに石を置いて、\n白を「ピ」へみちびくニャ！";
+        text = "じょうずに石を置いて、\n白を「ピ」へみちびくニャ！";
       }
       if (hole) {
         var frame =
@@ -393,11 +393,11 @@ phina.globalize();
         this.canStart &&
         !this.running &&
         !this.replaying;
+      // 元の編集盤面があれば、再生中や一時停止中でも「手直し」できる。
       var canEditAgain =
         !this.tutorialActive &&
         !this.canStart &&
         !this.running &&
-        !this.replaying &&
         !!this.editBoard;
       var primaryEnabled = editing || canEditAgain;
       var replayEnabled =
@@ -429,7 +429,8 @@ phina.globalize();
       else this.editAgain();
     },
     editAgain: function () {
-      if (this.running || this.replaying || !this.editBoard) return;
+      if (this.running || !this.editBoard) return;
+      // 再生中・一時停止中・一手送り/戻し中でも即座に編集へ戻る。
       this.tweener.clear();
       this.board = this.editBoard.clone();
       this.target = { x: TARGET.x, y: TARGET.y };
