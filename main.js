@@ -12,7 +12,7 @@ phina.globalize();
     MY = 740,
     BY = 850;
   var TARGET = { x: 1, y: 11 },
-    GOAL = { x: 11, y: 11 };
+    GOAL = { x: 10, y: 10 };
   var INIT = [
     { x: 0, y: 10, c: G.BLACK },
     { x: 0, y: 11, c: G.BLACK },
@@ -603,8 +603,6 @@ phina.globalize();
     },
     tap: function (px, py) {
       if (
-        !this.canStart ||
-        this.tutorialActive ||
         this.running ||
         this.replaying ||
         py < T - C / 2 ||
