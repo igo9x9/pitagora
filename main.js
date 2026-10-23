@@ -313,7 +313,7 @@ phina.globalize();
           C * 3.25,
           C * 3.2,
         );
-        text = "ここからシチョウがスタートだニャ！\n白が逃げるニャ";
+        text = "ここからシチョウが始まるニャ！\n白が逃げるニャ";
       } else if (this.tutorialStep === 2) {
         var goalP = pos(GOAL.x, GOAL.y);
         hole = this.addSpotlightCurtains(goalP.x, goalP.y, C * 2.2, C * 2.2);
@@ -664,7 +664,7 @@ phina.globalize();
       this.resetCat();
       this.updateButtons();
       this.clearHints();
-      this.save("シチョウ、スタートだニャ！");
+      this.save("スタートだニャ！");
       this.render();
       this.next();
     },
