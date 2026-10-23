@@ -9,7 +9,7 @@ phina.globalize();
     T = 42,
     BP = 612,
     C = BP / (S - 1),
-    MY = 735,
+    MY = 740,
     BY = 850;
   var TARGET = { x: 1, y: 11 },
     GOAL = { x: 11, y: 11 };
@@ -66,7 +66,9 @@ phina.globalize();
 
     var targetWidth = 600;
     var scale = targetWidth / titleLogo.width;
-    titleLogo.setScale(scale);      
+    titleLogo.setScale(scale);
+
+    Sprite("neko1").addChildTo(this).setPosition(W / 2, 630);
       
       btn(this, W / 2, 755, 330, "あそぶ", "#ef6c00", () => this.exit("main"));
       Label({
@@ -98,6 +100,7 @@ phina.globalize();
       this.captureMoves = [];
       this.captureStones = [];
       this.last = null;
+      this.catFrame = 1;
       this.tutorialStep = 1;
       this.tutorialActive = true;
       this.tutorialObjects = [];
@@ -109,8 +112,9 @@ phina.globalize();
         fill: "#fff",
         lineHeight: 1.35,
       })
-        .setPosition(W / 2, MY)
+        .setPosition(400, MY)
         .addChildTo(this);
+      this.catSprite = Sprite("neko1").addChildTo(this).setPosition(82, MY);
       this.startButton = btn(this, 150, BY, 190, "スタート", "#ef6c00", () => this.primaryAction());
       this.resetButton = btn(this, 360, BY, 170, "全消去", "#607d8b", () => this.reset());
       this.replayButton = btn(this, 570, BY, 170, "再生", "#1976d2", () => this.replay());
@@ -125,6 +129,19 @@ phina.globalize();
       this.render();
       this.showTutorialStep();
     },
+    setCat: function (name) {
+      if (this.catSprite) this.catSprite.image = name;
+    },
+    resetCat: function () {
+      this.catFrame = 1;
+      this.setCat("neko1");
+    },
+    toggleCat: function () {
+      this.catFrame = this.catFrame === 1 ? 2 : 1;
+      this.setCat(this.catFrame === 1 ? "neko1" : "neko2");
+    },
+    showHappyCat: function () { this.setCat("neko3"); },
+    showSadCat: function () { this.setCat("neko4"); },
     clearTutorial: function () {
       this.tutorialObjects.forEach((o) => o.remove());
       this.tutorialObjects = [];
@@ -162,12 +179,10 @@ phina.globalize();
         var startP = pos(TARGET.x, TARGET.y);
         hole = this.addSpotlightCurtains(startP.x - C * 0.45, startP.y, C * 3.25, C * 3.2);
         text = "1/3\nここからシチョウがスタート！\n白が逃げます";
-        textX = W / 2 + 55; textY = T + BP - 175;
       } else if (this.tutorialStep === 2) {
         var goalP = pos(GOAL.x, GOAL.y);
         hole = this.addSpotlightCurtains(goalP.x, goalP.y, C * 2.2, C * 2.2);
         text = "2/3\n白が「ピ」まで来たらゴール！";
-        textY = T + BP - 135;
       } else {
         text = "3/3\n石を置いて、\n白を「ピ」へ導こう！";
       }
@@ -235,6 +250,7 @@ phina.globalize();
       this.frames = [];
       this.clearHints();
       this.last = null;
+      this.resetCat();
       this.msg.text = "石を手直しして、もう一度スタート";
       this.render();
       this.updateButtons();
@@ -451,6 +467,7 @@ phina.globalize();
       this.running = true;
       this.moveCount = 1;
       this.frames = [];
+      this.resetCat();
       this.updateButtons();
       this.clearHints();
       this.save("シチョウ開始");
@@ -507,6 +524,7 @@ phina.globalize();
           this.last = r.move;
           this.moveCount++;
           this.clearHints();
+          this.toggleCat();
           this.msg.text = "白が逃げました";
           this.save("白が逃げました");
           this.render();
@@ -542,6 +560,8 @@ phina.globalize();
         this.target = r.target;
         this.turn = "black";
         this.last = r.move;
+        this.moveCount++;
+        this.toggleCat();
         this.save("白が逃げました");
         this.msg.text = "白が逃げました";
       } else {
@@ -555,6 +575,7 @@ phina.globalize();
         this.turn = "white";
         this.last = r.move;
         this.moveCount++;
+        this.toggleCat();
         this.save("黒がアタリ");
         this.msg.text = "黒がアタリ";
       }
@@ -595,11 +616,9 @@ phina.globalize();
     },
     finish: function (text, hintType) {
       this.running = false;
-      if (hintType === "branch")
-        this.msg.text = text + "\n黄色が白の逃げ道です";
-      else if (hintType === "capture")
-        this.msg.text = text + "\n赤枠が取れる黒石、黄色が取りの着手点です";
-      else this.msg.text = text;
+      if (text.indexOf("成功") === 0) this.showHappyCat();
+      else this.showSadCat();
+      this.msg.text = text;
       this.render();
       this.updateButtons();
     },
@@ -609,6 +628,7 @@ phina.globalize();
         this.replaying = true;
         this.replayPaused = false;
         this.fi = 0;
+        this.resetCat();
         this.updateButtons();
         this.playFrame();
         return;
@@ -640,6 +660,9 @@ phina.globalize();
       this.captureMoves = f.captureMoves || [];
       this.captureStones = f.captureStones || [];
       this.msg.text = "再生中：" + f.text;
+      if (f.text === "成功") this.showHappyCat();
+      else if (f.text === "白が逃げました" || f.text === "黒がアタリ") this.toggleCat();
+      else if (this.fi >= this.frames.length) this.showSadCat();
       this.render();
       this.tweener
         .clear()
@@ -658,6 +681,7 @@ phina.globalize();
       this.frames = [];
       this.clearHints();
       this.last = null;
+      this.resetCat();
       this.msg.text =
         "空点タップ：白 → 黒 → 空";
       this.render();
@@ -669,6 +693,10 @@ phina.globalize();
     assets: {
       image: {
         titleLogo: "title.png",
+        neko1: "neko1.png",
+        neko2: "neko2.png",
+        neko3: "neko3.png",
+        neko4: "neko4.png",
       },
     },
     }).run();
