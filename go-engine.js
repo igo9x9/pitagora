@@ -232,29 +232,26 @@
       return turn + "|" + t.x + "," + t.y + "|" + b.cells.join("");
     }
     rank(o) {
+      // 黒は最終結果を最優先。捕獲できる変化を、長く追えるだけの変化より優先する。
       var r = {
-        goal: 8,
-        captured: 7,
-        whiteBranch: 6,
-        whiteCanCapture: 5,
-        obstacle: 4,
-        noEscape: 3,
-        blackNone: 2,
-        illegal: 1,
-        cycle: 0,
-        readLimit: 0,
+        captured: 100,
+        noEscape: 95,
+        blackNone: 60,
+        whiteCanCapture: 35,
+        whiteBranch: 30,
+        obstacle: 25,
+        readLimit: 15,
+        cycle: 10,
+        illegal: 5,
+        goal: 0,
       };
       return r[o] === undefined ? -1 : r[o];
     }
     compare(a, b) {
-      if (a.outcome === "goal" && b.outcome !== "goal") return 1;
-      if (b.outcome === "goal" && a.outcome !== "goal") return -1;
+      var rankA = this.rank(a.outcome), rankB = this.rank(b.outcome);
+      if (rankA !== rankB) return rankA > rankB ? 1 : -1;
       if (a.plies !== b.plies) return a.plies > b.plies ? 1 : -1;
-      return this.rank(a.outcome) === this.rank(b.outcome)
-        ? 0
-        : this.rank(a.outcome) > this.rank(b.outcome)
-          ? 1
-          : -1;
+      return 0;
     }
     read(b, t, turn, path, d) {
       if (d >= this.maxRead) return { outcome: "readLimit", plies: 0 };
