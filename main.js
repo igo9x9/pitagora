@@ -804,25 +804,29 @@ phina.globalize();
             var explanation = new G.LadderEngine(this.board, this.target, GOAL).explainBranch(this.board, this.target);
             if (explanation) {
               this.board = explanation.board; this.last = explanation.move; this.branchMarkers = explanation.liberties;
-              this.save("黒が追ったニャ");
+              // this.save("黒が追ったニャ");
               resultText = "白の逃げ道が" + explanation.liberties.length + "つあるニャ！";
+              this.save(resultText);
             } else {
               var group = this.board.groupAt(this.target.x, this.target.y);
               this.branchMarkers = this.board.playableLiberties(group);
-              this.save("逃げ道はここだニャ");
+              // this.save("逃げ道はここだニャ");
               resultText = "白の逃げ道が" + this.branchMarkers.length + "つあるニャ！";
+              this.save(resultText);
             }
             break;
           }
           if (r.status === "white-branch") {
             this.clearHints(); this.branchMarkers = r.liberties || [];
-            this.save("白の逃げ道がいっぱいだニャ");
+            // this.save("白の逃げ道がいっぱいだニャ");
             resultText = "白の逃げ道が" + r.count + "つあるニャ！";
+            this.save(resultText);
             break;
           }
           if (r.status === "white-can-capture") {
             this.collectCaptureHints(r); this.save("白が黒石を取れるニャ");
             resultText = "赤枠の黒石も取れちゃうニャ！";
+            this.save(resultText);
             break;
           }
           if (r.status !== "ok") {
