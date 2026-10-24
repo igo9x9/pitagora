@@ -108,6 +108,10 @@ phina.globalize();
       this.tutorialObjects = [];
       this.replayNavVisible = false;
       this.replayCurrentIndex = -1;
+      this.playbackInterval = 150;
+      this.simulationResult = null;
+      this.goalReached = false;
+      this.piAnimating = false;
       this.base = DisplayElement().addChildTo(this);
       this.drawBase();
       this.msg = Label({
@@ -119,14 +123,17 @@ phina.globalize();
         .setPosition(380, MY)
         .addChildTo(this);
       this.catSprite = Sprite("neko1").addChildTo(this).setPosition(82, MY);
+      // 左：進行操作（スタート / 一時停止 / 再開 / リプレイ）
       this.startButton = btn(this, 150, BY, 190, "スタート", "#ef6c00", () =>
         this.primaryAction(),
       );
-      this.resetButton = btn(this, 360, BY, 170, "全消去", "#607d8b", () =>
-        this.reset(),
+      // 中央：手直し
+      this.resetButton = btn(this, 360, BY, 170, "手直し", "#1976d2", () =>
+        this.editAgain(),
       );
-      this.replayButton = btn(this, 570, BY, 170, "再生", "#1976d2", () =>
-        this.replay(),
+      // 右：全消去
+      this.replayButton = btn(this, 570, BY, 170, "全消去", "#607d8b", () =>
+        this.reset(),
       );
       this.prevReplayButton = btn(this, 255, BY + 92, 84, "◀", "#455a64", () =>
         this.stepReplay(-1),
@@ -142,7 +149,13 @@ phina.globalize();
       })
         .setPosition(360, BY + 92)
         .addChildTo(this);
+      this.speedLabel = Label({ text: "速さ", fontSize: 23, fill: "#fff", fontWeight: "bold" })
+        .setPosition(65, BY + 184).addChildTo(this);
+      this.slowSpeedButton = btn(this, 205, BY + 184, 130, "ゆっくり", "#607d8b", () => this.setPlaybackSpeed(350));
+      this.normalSpeedButton = btn(this, 360, BY + 184, 130, "ふつう", "#607d8b", () => this.setPlaybackSpeed(150));
+      this.fastSpeedButton = btn(this, 515, BY + 184, 130, "はやい", "#607d8b", () => this.setPlaybackSpeed(60));
       this.setReplayNavVisible(false);
+      this.updateSpeedButtons();
       this.updateButtons();
       this.onpointstart = (e) => {
         if (this.tutorialActive) {
@@ -159,6 +172,31 @@ phina.globalize();
       if (this.prevReplayButton) this.prevReplayButton.visible = visible;
       if (this.nextReplayButton) this.nextReplayButton.visible = visible;
       if (this.replayCounter) this.replayCounter.visible = visible;
+      if (this.speedLabel) this.speedLabel.visible = visible;
+      if (this.slowSpeedButton) this.slowSpeedButton.visible = visible;
+      if (this.normalSpeedButton) this.normalSpeedButton.visible = visible;
+      if (this.fastSpeedButton) this.fastSpeedButton.visible = visible;
+      if (visible) this.updateSpeedButtons();
+    },
+    setPlaybackSpeed: function (milliseconds) {
+      this.playbackInterval = milliseconds;
+      this.updateSpeedButtons();
+      if (this.replaying && !this.replayPaused) {
+        this.tweener.clear().wait(this.playbackInterval).call(() => this.playFrame());
+      }
+    },
+    updateSpeedButtons: function () {
+      [
+        { button: this.slowSpeedButton, value: 350 },
+        { button: this.normalSpeedButton, value: 150 },
+        { button: this.fastSpeedButton, value: 60 },
+      ].forEach((item) => {
+        if (!item.button) return;
+        var selected = this.playbackInterval === item.value;
+        item.button.fill = selected ? "#ffd600" : "#607d8b";
+        item.button.alpha = selected ? 1 : 0.78;
+        if (item.button.buttonLabel) item.button.buttonLabel.fill = selected ? "#000" : "#fff";
+      });
     },
     updateReplayCounter: function () {
       if (!this.replayCounter) return;
@@ -183,6 +221,9 @@ phina.globalize();
       if (!this.frames.length) return;
       index = Math.max(0, Math.min(this.frames.length - 1, index));
       var f = this.frames[index];
+      var wasGoalReached = this.goalReached;
+      // 成功フレームだけpi.pngを表示する。1手戻せば自動的に消える。
+      this.goalReached = f.text.indexOf("ゴールだニャ！") === 0;
       this.replayCurrentIndex = index;
       this.fi = index + 1;
       this.board = new G.GoBoard(S, f.cells);
@@ -191,8 +232,8 @@ phina.globalize();
       this.captureMoves = f.captureMoves || [];
       this.captureStones = f.captureStones || [];
       this.msg.text = f.text;
-      if (f.text === "成功だニャ") this.showHappyCat();
-      else if (index === this.frames.length - 1 && f.text !== "成功だニャ")
+      if (this.goalReached) this.showHappyCat();
+      else if (index === this.frames.length - 1)
         this.showSadCat();
       else {
         var n = 0;
@@ -203,7 +244,15 @@ phina.globalize();
         this.catFrame = n % 2 === 0 ? 1 : 2;
         this.setCat(this.catFrame === 1 ? "neko1" : "neko2");
       }
-      this.render();
+      if (this.goalReached && !wasGoalReached) {
+        // ゴールへ入った瞬間は、旗なしの盤面を描いてから旗を立てる。
+        this.piAnimating = true;
+        this.render();
+        this.showPiFlag(true);
+        this.piAnimating = false;
+      } else {
+        this.render();
+      }
       this.updateReplayCounter();
     },
     stepReplay: function (delta) {
@@ -213,6 +262,12 @@ phina.globalize();
       this.tweener.clear();
       var base = this.replayCurrentIndex >= 0 ? this.replayCurrentIndex : 0;
       this.showReplayFrame(base + delta);
+      if (this.replayCurrentIndex === this.frames.length - 1) {
+        // 手動で最終フレームへ到達したら、結果後の状態へ確定する。
+        this.replaying = false;
+        this.replayPaused = false;
+        this.fi = this.frames.length;
+      }
       this.updateButtons();
     },
     setCat: function (name) {
@@ -313,13 +368,13 @@ phina.globalize();
           C * 3.25,
           C * 3.2,
         );
-        text = "ここからシチョウが始まるニャ！\n白が逃げるニャ";
+        text = "ここからシチョウが始まって、\n白が逃げます";
       } else if (this.tutorialStep === 2) {
         var goalP = pos(GOAL.x, GOAL.y);
         hole = this.addSpotlightCurtains(goalP.x, goalP.y, C * 2.2, C * 2.2);
-        text = "白が「ピ」まで来たらゴールだニャ！";
+        text = "白が「Ｇ」まで来たらゴールです！";
       } else {
-        text = "じょうずに石を置いて、\n白を「ピ」へみちびくニャ！";
+        text = "じょうずに石を置いて、\n白をゴールへみちびこう！";
       }
       if (hole) {
         var frame =
@@ -386,47 +441,72 @@ phina.globalize();
       this.updateButtons();
     },
     updateButtons: function () {
-      if (!this.startButton || !this.replayButton) return;
+      if (!this.startButton || !this.resetButton || !this.replayButton) return;
 
-      var editing =
-        !this.tutorialActive &&
-        this.canStart &&
-        !this.running &&
-        !this.replaying;
-      // 元の編集盤面があれば、再生中や一時停止中でも「手直し」できる。
-      var canEditAgain =
-        !this.tutorialActive &&
-        !this.canStart &&
-        !this.running &&
-        !!this.editBoard;
-      var primaryEnabled = editing || canEditAgain;
-      var replayEnabled =
-        !this.tutorialActive && !this.running && this.frames.length > 0;
+      var editing = !this.tutorialActive && this.canStart && !this.running && !this.replaying;
+      var playing = !this.tutorialActive && !this.running && this.replaying && !this.replayPaused;
+      var paused = !this.tutorialActive && !this.running && this.replaying && this.replayPaused;
+      var result = !this.tutorialActive && !this.running && !this.replaying && !this.canStart && this.frames.length > 0;
+      var calculating = !this.tutorialActive && this.running;
 
-      this.startButton.fill = primaryEnabled ? "#ef6c00" : "#777777";
-      this.startButton.alpha = primaryEnabled ? 1.0 : 0.55;
-      this.startButton.setInteractive(primaryEnabled);
-      if (this.startButton.buttonLabel) {
-        this.startButton.buttonLabel.text = canEditAgain
-          ? "手直し"
-          : "スタート";
-      }
+      var leftEnabled = editing || playing || paused || result;
+      var leftText = "スタート";
+      if (playing) leftText = "一時停止";
+      else if (paused) leftText = "再開";
+      else if (result) leftText = "リプレイ";
+      this.startButton.fill = leftEnabled ? "#ef6c00" : "#777777";
+      this.startButton.alpha = leftEnabled ? 1 : 0.55;
+      this.startButton.setInteractive(leftEnabled);
+      if (this.startButton.buttonLabel) this.startButton.buttonLabel.text = leftText;
 
-      this.replayButton.fill = replayEnabled ? "#1976d2" : "#777777";
-      this.replayButton.alpha = replayEnabled ? 1.0 : 0.55;
-      this.replayButton.setInteractive(replayEnabled);
-      if (this.replayButton.buttonLabel) {
-        this.replayButton.buttonLabel.text = this.replaying
-          ? this.replayPaused
-            ? "再開"
-            : "一時停止"
-          : "再生";
+      var editEnabled = (paused || result) && !!this.editBoard;
+      this.resetButton.fill = editEnabled ? "#1976d2" : "#777777";
+      this.resetButton.alpha = editEnabled ? 1 : 0.55;
+      this.resetButton.setInteractive(editEnabled);
+      if (this.resetButton.buttonLabel) this.resetButton.buttonLabel.text = "手直し";
+
+      var clearEnabled = editing || paused || result;
+      this.replayButton.fill = clearEnabled ? "#607d8b" : "#777777";
+      this.replayButton.alpha = clearEnabled ? 1 : 0.55;
+      this.replayButton.setInteractive(clearEnabled);
+      if (this.replayButton.buttonLabel) this.replayButton.buttonLabel.text = "全消去";
+
+      if (calculating) {
+        this.startButton.setInteractive(false);
+        this.resetButton.setInteractive(false);
+        this.replayButton.setInteractive(false);
       }
       this.updateReplayCounter();
     },
     primaryAction: function () {
-      if (this.canStart) this.start();
-      else this.editAgain();
+      if (this.tutorialActive || this.running) return;
+      if (this.canStart) { this.start(); return; }
+      if (this.replaying) {
+        if (this.replayPaused) {
+          this.replayPaused = false;
+          this.updateButtons();
+          this.playFrame();
+        } else {
+          this.replayPaused = true;
+          this.tweener.clear();
+          this.msg.text = "ちょっと待つニャ";
+          this.updateButtons();
+        }
+        return;
+      }
+      if (this.frames.length > 0) this.startReplayFromBeginning();
+    },
+    startReplayFromBeginning: function () {
+      if (!this.frames.length || this.running) return;
+      this.replaying = true;
+      this.replayPaused = false;
+      this.fi = 0;
+      this.replayCurrentIndex = -1;
+      this.goalReached = false;
+      this.setReplayNavVisible(true);
+      this.resetCat();
+      this.updateButtons();
+      this.playFrame();
     },
     editAgain: function () {
       if (this.running || !this.editBoard) return;
@@ -440,6 +520,8 @@ phina.globalize();
       this.replayPaused = false;
       this.canStart = true;
       this.frames = [];
+      this.goalReached = false;
+      this.piAnimating = false;
       this.replayCurrentIndex = -1;
       this.setReplayNavVisible(false);
       this.clearHints();
@@ -509,7 +591,7 @@ phina.globalize();
           .addChildTo(this),
       );
       this.add(
-        Label({ text: "ピ", fontSize: 24, fill: "#000", fontWeight: "bold" })
+        Label({ text: "Ｇ", fontSize: 24, fill: "#000", fontWeight: "bold" })
           .setPosition(p.x, p.y)
           .addChildTo(this),
       );
@@ -589,6 +671,9 @@ phina.globalize();
             .addChildTo(this),
         );
       }
+
+      // 通常の再描画では立った旗を表示。アニメーション時は別途生成する。
+      if (!this.piAnimating) this.showPiFlag(false);
     },
     fixed: function (x, y) {
       return (
@@ -652,152 +737,144 @@ phina.globalize();
     },
     start: function () {
       if (this.running || this.replaying || !this.canStart) return;
-      // プレイヤーが配置した盤面を、手直し用に保存する。
       this.editBoard = this.board.clone();
       this.canStart = false;
+      this.running = true;
+      this.replaying = false;
+      this.replayPaused = false;
+      this.frames = [];
+      this.simulationResult = null;
+      this.goalReached = false;
+      this.piAnimating = false;
+      this.replayCurrentIndex = -1;
+      this.setReplayNavVisible(true);
+      this.clearHints();
+      this.resetCat();
+      this.msg.text = "最後まで考え中だニャ…";
+      this.render();
+      this.updateButtons();
+
+      // メッセージを一度描画してから、同期的に最終結果まで計算する。
+      this.tweener.clear().wait(30).call(() => this.calculateAll());
+    },
+    collectCaptureHints: function (r) {
+      this.clearHints();
+      var stoneSeen = Object.create(null), moveSeen = Object.create(null);
+      for (var c of r.captures || []) {
+        var mk = c.move.x + "," + c.move.y;
+        if (!moveSeen[mk]) { moveSeen[mk] = true; this.captureMoves.push({ x: c.move.x, y: c.move.y }); }
+        for (var stone of c.group.stones) {
+          var sk = stone.x + "," + stone.y;
+          if (!stoneSeen[sk]) { stoneSeen[sk] = true; this.captureStones.push({ x: stone.x, y: stone.y }); }
+        }
+      }
+    },
+    calculateAll: function () {
       this.board = this.normal();
       this.target = { x: TARGET.x, y: TARGET.y };
       this.turn = "white";
-      this.running = true;
       this.moveCount = 1;
-      this.frames = [];
-      this.resetCat();
-      this.updateButtons();
+      this.last = null;
       this.clearHints();
       this.save("スタートだニャ！");
-      this.render();
-      this.next();
+
+      var maxMoves = S * S * 4;
+      var resultText = "読みが長すぎるニャ";
+      var success = false;
+
+      for (var i = 0; i < maxMoves; i++) {
+        var engine = new G.LadderEngine(this.board, this.target, GOAL);
+        var r;
+
+        if (this.turn === "white") {
+          r = engine.stepWhite();
+          if (r.status === "goal") {
+            if (r.board) { this.board = r.board; this.moveCount++; }
+            this.last = r.move || this.last;
+            this.clearHints();
+            resultText = "ゴールだニャ！（" + this.moveCount + "手）";
+            this.goalReached = true;
+            this.save(resultText);
+            success = true;
+            break;
+          }
+          if (r.status === "white-branch" && r.board) {
+            this.board = r.board; this.target = r.target; this.last = r.move; this.moveCount++;
+            this.clearHints(); this.save("白が逃げるニャ");
+            var explanation = new G.LadderEngine(this.board, this.target, GOAL).explainBranch(this.board, this.target);
+            if (explanation) {
+              this.board = explanation.board; this.last = explanation.move; this.branchMarkers = explanation.liberties;
+              this.save("黒が追ったニャ");
+              resultText = "白の逃げ道が" + explanation.liberties.length + "つあるニャ！";
+            } else {
+              var group = this.board.groupAt(this.target.x, this.target.y);
+              this.branchMarkers = this.board.playableLiberties(group);
+              this.save("逃げ道はここだニャ");
+              resultText = "白の逃げ道が" + this.branchMarkers.length + "つあるニャ！";
+            }
+            break;
+          }
+          if (r.status === "white-branch") {
+            this.clearHints(); this.branchMarkers = r.liberties || [];
+            this.save("白の逃げ道がいっぱいだニャ");
+            resultText = "白の逃げ道が" + r.count + "つあるニャ！";
+            break;
+          }
+          if (r.status === "white-can-capture") {
+            this.collectCaptureHints(r); this.save("白が黒石を取れるニャ");
+            resultText = "赤枠の黒石も取れちゃうニャ！";
+            break;
+          }
+          if (r.status !== "ok") {
+            resultText = ({ obstacle:"シチョウが続かないニャ", "no-escape":"白はもう逃げられないニャ", captured:"白はもう逃げられないニャ", illegal:"白はそこに打てないニャ" })[r.status] || "白が止まったニャ";
+            this.save(resultText);
+            break;
+          }
+          this.board = r.board; this.target = r.target; this.turn = "black"; this.last = r.move; this.moveCount++;
+          this.clearHints(); this.save("白が逃げるニャ");
+        } else {
+          r = engine.chooseBlack();
+          if (r.status !== "ok") { resultText = "黒はアタリを続けられないニャ"; this.save(resultText); break; }
+          this.board = r.board; this.target = r.target; this.turn = "white"; this.last = r.move; this.moveCount++;
+          this.clearHints(); this.save("黒が追うニャ");
+        }
+      }
+
+      this.simulationResult = { text: resultText, success: success };
+      this.running = false;
+      this.replaying = true;
+      this.replayPaused = false;
+      this.fi = 0;
+      this.replayCurrentIndex = -1;
+      this.resetCat();
+      this.updateButtons();
+      this.playFrame();
     },
-    next: function () {
-      this.tweener
+    showPiFlag: function (animate) {
+      if (!this.goalReached || this.board.get(GOAL.x, GOAL.y) !== G.WHITE) return;
+
+      var gp = pos(GOAL.x, GOAL.y);
+      var flag = Sprite("pi")
+        // 左下を白石中央に合わせ、回転支点にもする。
+        .setOrigin(0, 1)
+        .setPosition(gp.x, gp.y)
+        .addChildTo(this);
+
+      flag.width = 48;
+      flag.height = 48;
+      this.add(flag);
+
+      if (!animate) {
+        flag.rotation = 0;
+        return;
+      }
+
+      // 右へ90度倒れた状態から、少し行き過ぎてパッと立つ。
+      flag.rotation = 90;
+      flag.tweener
         .clear()
-        .wait(330)
-        .call(() => this.advance());
-    },
-    showCaptureFailure: function (r) {
-      this.clearHints();
-      var stoneSeen = Object.create(null),
-        moveSeen = Object.create(null);
-      for (var c of r.captures || []) {
-        var mk = c.move.x + "," + c.move.y;
-        if (!moveSeen[mk]) {
-          moveSeen[mk] = true;
-          this.captureMoves.push({ x: c.move.x, y: c.move.y });
-        }
-        for (var s of c.group.stones) {
-          var sk = s.x + "," + s.y;
-          if (!stoneSeen[sk]) {
-            stoneSeen[sk] = true;
-            this.captureStones.push({ x: s.x, y: s.y });
-          }
-        }
-      }
-      this.save("白が黒石を取れるニャ");
-      this.finish("赤枠の黒石も取れちゃうニャ！", "capture");
-    },
-    advance: function () {
-      if (!this.running) return;
-      var e = new G.LadderEngine(this.board, this.target, GOAL),
-        r;
-      if (this.turn === "white") {
-        r = e.stepWhite();
-        if (r.status === "goal") {
-          if (r.board) {
-            this.board = r.board;
-            this.moveCount++;
-          }
-          this.last = r.move || this.last;
-          this.save("成功だニャ");
-          this.finish("ゴールだニャ！（" + this.moveCount + "手）");
-          this.showGoalEffect();
-          return;
-        }
-        if (r.status === "white-branch" && r.board) {
-          this.board = r.board;
-          this.target = r.target;
-          this.last = r.move;
-          this.moveCount++;
-          this.clearHints();
-          this.toggleCat();
-          this.msg.text = "白が逃げるニャ";
-          this.save("白が逃げるニャ");
-          this.render();
-          this.tweener
-            .clear()
-            .wait(400)
-            .call(() => this.showBranchAfterBlack());
-          return;
-        }
-        if (r.status === "white-branch") {
-          this.clearHints();
-          this.branchMarkers = r.liberties || [];
-          this.save("白の逃げ道がいっぱいだニャ");
-          this.finish("白の逃げ道が" + r.count + "つあるニャ！", "branch");
-          return;
-        }
-        if (r.status === "white-can-capture") {
-          this.showCaptureFailure(r);
-          return;
-        }
-        if (r.status !== "ok") {
-          var m =
-            {
-              obstacle: "シチョウが続かないニャ",
-              "no-escape": "白はもう逃げられないニャ",
-              captured: "白はもう逃げられないニャ",
-              illegal: "白はそこに打てないニャ",
-            }[r.status] || "白が止まったニャ";
-          this.finish(m);
-          return;
-        }
-        this.board = r.board;
-        this.target = r.target;
-        this.turn = "black";
-        this.last = r.move;
-        this.moveCount++;
-        this.toggleCat();
-        this.save("白が逃げるニャ");
-        this.msg.text = "白が逃げるニャ";
-      } else {
-        r = e.chooseBlack();
-        if (r.status !== "ok") {
-          this.finish("黒はアタリを続けられないニャ");
-          return;
-        }
-        this.board = r.board;
-        this.target = r.target;
-        this.turn = "white";
-        this.last = r.move;
-        this.moveCount++;
-        this.toggleCat();
-        this.save("黒が追うニャ");
-        this.msg.text = "黒が追うニャ";
-      }
-      this.render();
-      this.next();
-    },
-    showBranchAfterBlack: function () {
-      var e = new G.LadderEngine(this.board, this.target, GOAL),
-        x = e.explainBranch(this.board, this.target);
-      this.clearHints();
-      if (x) {
-        this.board = x.board;
-        this.last = x.move;
-        this.branchMarkers = x.liberties;
-        this.save("黒が追ったニャ");
-        this.finish(
-          "白の逃げ道が" + x.liberties.length + "つあるニャ！",
-          "branch",
-        );
-      } else {
-        var g = this.board.groupAt(this.target.x, this.target.y);
-        this.branchMarkers = this.board.playableLiberties(g);
-        this.save("逃げ道はここだニャ");
-        this.finish(
-          "白の逃げ道が" + this.branchMarkers.length + "つあるニャ！",
-          "branch",
-        );
-      }
+        .to({ rotation: -8 }, 180, "easeOutBack")
+        .to({ rotation: 0 }, 90, "easeOutQuad");
     },
     showGoalEffect: function () {
       // 完成した盤面を隠さず、成功メッセージだけを軽く弾ませる。
@@ -829,43 +906,22 @@ phina.globalize();
       this.updateButtons();
     },
     replay: function () {
-      if (this.running || !this.frames.length) return;
-      if (!this.replaying) {
-        this.replaying = true;
-        this.replayPaused = false;
-        this.fi = 0;
-        this.replayCurrentIndex = -1;
-        this.setReplayNavVisible(true);
-        this.resetCat();
-        this.updateButtons();
-        this.playFrame();
-        return;
-      }
-      if (!this.replayPaused) {
-        this.replayPaused = true;
-        this.tweener.clear();
-        this.msg.text = "ちょっと待つニャ";
-        this.updateButtons();
-        return;
-      }
-      this.replayPaused = false;
-      this.updateButtons();
-      this.playFrame();
+      this.startReplayFromBeginning();
     },
     playFrame: function () {
       if (!this.replaying || this.replayPaused) return;
       if (this.fi >= this.frames.length) {
         this.replaying = false;
         this.replayPaused = false;
-        this.msg.text = "再生おわりだニャ";
+        this.replayCurrentIndex = this.frames.length - 1;
+        this.fi = this.frames.length;
+        this.setReplayNavVisible(true);
+        this.updateReplayCounter();
         this.updateButtons();
         return;
       }
       this.showReplayFrame(this.fi);
-      this.tweener
-        .clear()
-        .wait(150)
-        .call(() => this.playFrame());
+      this.tweener.clear().wait(this.playbackInterval).call(() => this.playFrame());
     },
     reset: function () {
       this.tweener.clear();
@@ -877,6 +933,9 @@ phina.globalize();
       this.canStart = true;
       this.editBoard = null;
       this.frames = [];
+      this.simulationResult = null;
+      this.goalReached = false;
+      this.piAnimating = false;
       this.replayCurrentIndex = -1;
       this.setReplayNavVisible(false);
       this.clearHints();
@@ -901,6 +960,7 @@ phina.globalize();
           neko2: "neko2.png",
           neko3: "neko3.png",
           neko4: "neko4.png",
+          pi: "pi.png",
         },
       },
     }).run();
