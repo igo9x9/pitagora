@@ -74,7 +74,7 @@ phina.globalize();
 
       btn(this, W / 2, 755, 330, "あそぶ", "#ef6c00", () => this.exit("main"));
       Label({
-        text: "シチョウで、白石をゴールまでみちびくニャ！\n白の逃げ道が2つ以上になったら失敗ニャ",
+        text: "シチョウで、白石をゴールにみちびこう！",
         fontSize: 28,
         fill: "#fff",
         lineHeight: 1.5,
@@ -253,6 +253,7 @@ phina.globalize();
         this.piAnimating = true;
         this.render();
         this.showPiFlag(true);
+        this.showGoalCelebration();
         this.piAnimating = false;
       } else {
         this.render();
@@ -376,7 +377,7 @@ phina.globalize();
       } else if (this.tutorialStep === 2) {
         var goalP = pos(GOAL.x, GOAL.y);
         hole = this.addSpotlightCurtains(goalP.x, goalP.y, C * 2.2, C * 2.2);
-        text = "白が「Ｇ」まで来たらゴールです！";
+        text = "白が「Ｇ」まで来たらゴールです";
       } else {
         text = "じょうずに石を置いて、\n白をゴールへみちびこう！";
       }
@@ -599,23 +600,35 @@ phina.globalize();
     updateStoneSprites: function () {
       var oldLast = this.displayedLastKey;
       var newLast = this.last ? this.last.x + "," + this.last.y : "";
-      for (var y=0; y<S; y++) for (var x=0; x<S; x++) {
-        var i=y*S+x, value=this.board.get(x,y), sprite=this.stoneSprites[y][x];
-        var isStone=value===G.BLACK || value===G.WHITE;
-        if (this.displayedCells[i] !== value) {
-          sprite.visible = isStone;
-          if (isStone) {
-            sprite.fill = value===G.BLACK ? "#151719" : "#f8f4e8";
-            sprite.stroke = value===G.BLACK ? "#000" : "#aaa";
-            sprite.strokeWidth = 2;
+      for (var y = 0; y < S; y++) {
+        for (var x = 0; x < S; x++) {
+          var i = y * S + x;
+          var value = this.board.get(x, y);
+          var sprite = this.stoneSprites[y][x];
+          var isStone = value === G.BLACK || value === G.WHITE;
+          var key = x + "," + y;
+          var changed = this.displayedCells[i] !== value;
+
+          if (changed) {
+            if (isStone) {
+              // ちらつき対策：色と輪郭を先に確定し、最後に表示する。
+              sprite.fill = value === G.BLACK ? "#151719" : "#f8f4e8";
+              sprite.stroke = value === G.BLACK ? "#000" : "#aaa";
+              sprite.strokeWidth = 2;
+              sprite.visible = true;
+            } else {
+              sprite.visible = false;
+            }
+            this.displayedCells[i] = value;
           }
-          this.displayedCells[i] = value;
-        }
-        var key=x+","+y;
-        if (isStone && (key===oldLast || key===newLast || this.displayedCells[i] !== value)) {
-          var hi=key===newLast;
-          sprite.stroke = hi ? "#ff5252" : value===G.BLACK ? "#000" : "#aaa";
-          sprite.strokeWidth = hi ? 5 : 2;
+
+          if (isStone && (changed || key === oldLast || key === newLast)) {
+            var hi = key === newLast;
+            sprite.stroke = hi
+              ? "#ff5252"
+              : value === G.BLACK ? "#000" : "#aaa";
+            sprite.strokeWidth = hi ? 5 : 2;
+          }
         }
       }
       this.displayedLastKey = newLast;
@@ -899,6 +912,48 @@ phina.globalize();
         .clear()
         .to({ rotation: -8 }, 180, "easeOutBack")
         .to({ rotation: 0 }, 90, "easeOutQuad");
+    },
+    showGoalCelebration: function () {
+      var center = pos(GOAL.x, GOAL.y);
+      var colors = ["#ffd600", "#ff5252", "#42a5f5", "#ffffff"];
+      var count = 12;
+
+      // G周辺だけに小さな色粒を飛ばす控えめな祝福演出。
+      for (let i = 0; i < count; i++) {
+        var angle = (Math.PI * 2 * i) / count;
+        var distance = 45 + (i % 3) * 10;
+        var particle = CircleShape({
+          radius: 5,
+          fill: colors[i % colors.length],
+          stroke: "transparent",
+        }).setPosition(center.x, center.y).addChildTo(this);
+        this.add(particle);
+
+        particle.tweener.clear()
+          .to({
+              x: center.x + Math.cos(angle) * distance,
+              y: center.y + Math.sin(angle) * distance,
+            }, 800, "easeOutQuad")
+          .wait(100)
+          .to({
+            alpha: 0,
+            scaleX: 0.5,
+            scaleY: 0.5,
+          }, 350, "easeOutQuad")
+          .call(() => particle.remove());
+      }
+
+      // ゴール地点から黄色いリングを1回だけ広げる。
+      var ring = CircleShape({
+        radius: 24,
+        fill: "transparent",
+        stroke: "#ffd600",
+        strokeWidth: 6,
+      }).setPosition(center.x, center.y).addChildTo(this);
+      this.add(ring);
+      ring.tweener.clear()
+        .to({ scaleX: 2.2, scaleY: 2.2, alpha: 0 }, 800, "easeOutQuad")
+        .call(() => ring.remove());
     },
     showGoalEffect: function () {
       // 完成した盤面を隠さず、成功メッセージだけを軽く弾ませる。
