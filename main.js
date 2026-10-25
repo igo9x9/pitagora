@@ -108,12 +108,16 @@ phina.globalize();
       this.tutorialObjects = [];
       this.replayNavVisible = false;
       this.replayCurrentIndex = -1;
-      this.playbackInterval = 150;
+      this.playbackInterval = 200;
       this.simulationResult = null;
       this.goalReached = false;
       this.piAnimating = false;
+      this.stoneSprites = [];
+      this.displayedCells = Array(S * S).fill(-1);
+      this.displayedLastKey = "";
       this.base = DisplayElement().addChildTo(this);
       this.drawBase();
+      this.createBoardSprites();
       this.msg = Label({
         text: "",
         fontSize: 30,
@@ -151,9 +155,9 @@ phina.globalize();
         .addChildTo(this);
       this.speedLabel = Label({ text: "速さ", fontSize: 23, fill: "#fff", fontWeight: "bold" })
         .setPosition(65, BY + 184).addChildTo(this);
-      this.slowSpeedButton = btn(this, 205, BY + 184, 130, "ゆっくり", "#607d8b", () => this.setPlaybackSpeed(350));
-      this.normalSpeedButton = btn(this, 360, BY + 184, 130, "ふつう", "#607d8b", () => this.setPlaybackSpeed(150));
-      this.fastSpeedButton = btn(this, 515, BY + 184, 130, "はやい", "#607d8b", () => this.setPlaybackSpeed(60));
+      this.slowSpeedButton = btn(this, 205, BY + 184, 130, "ゆっくり", "#607d8b", () => this.setPlaybackSpeed(400));
+      this.normalSpeedButton = btn(this, 360, BY + 184, 130, "ふつう", "#607d8b", () => this.setPlaybackSpeed(200));
+      this.fastSpeedButton = btn(this, 515, BY + 184, 130, "はやい", "#607d8b", () => this.setPlaybackSpeed(100));
       this.setReplayNavVisible(false);
       this.updateSpeedButtons();
       this.updateButtons();
@@ -187,9 +191,9 @@ phina.globalize();
     },
     updateSpeedButtons: function () {
       [
-        { button: this.slowSpeedButton, value: 350 },
-        { button: this.normalSpeedButton, value: 150 },
-        { button: this.fastSpeedButton, value: 60 },
+        { button: this.slowSpeedButton, value: 400 },
+        { button: this.normalSpeedButton, value: 200 },
+        { button: this.fastSpeedButton, value: 100 },
       ].forEach((item) => {
         if (!item.button) return;
         var selected = this.playbackInterval === item.value;
@@ -513,6 +517,7 @@ phina.globalize();
       // 再生中・一時停止中・一手送り/戻し中でも即座に編集へ戻る。
       this.tweener.clear();
       this.board = this.editBoard.clone();
+      this.invalidateStoneDisplay();
       this.target = { x: TARGET.x, y: TARGET.y };
       this.turn = "white";
       this.running = false;
@@ -570,6 +575,51 @@ phina.globalize();
           .addChildTo(this.base);
       });
     },
+    createBoardSprites: function () {
+      var gp = pos(GOAL.x, GOAL.y);
+      this.goalCircle = CircleShape({ radius:23, fill:"#ffd600", stroke:"#fff", strokeWidth:5 })
+        .setPosition(gp.x, gp.y).addChildTo(this);
+      this.goalLabel = Label({ text:"Ｇ", fontSize:24, fill:"#000", fontWeight:"bold" })
+        .setPosition(gp.x, gp.y).addChildTo(this);
+      for (var y=0; y<S; y++) {
+        this.stoneSprites[y] = [];
+        for (var x=0; x<S; x++) {
+          var p = pos(x,y);
+          var stone = CircleShape({ radius:22, fill:"#151719", stroke:"#000", strokeWidth:2 })
+            .setPosition(p.x,p.y).addChildTo(this);
+          stone.visible = false;
+          this.stoneSprites[y][x] = stone;
+        }
+      }
+    },
+    invalidateStoneDisplay: function () {
+      this.displayedCells = Array(S * S).fill(-1);
+      this.displayedLastKey = "";
+    },
+    updateStoneSprites: function () {
+      var oldLast = this.displayedLastKey;
+      var newLast = this.last ? this.last.x + "," + this.last.y : "";
+      for (var y=0; y<S; y++) for (var x=0; x<S; x++) {
+        var i=y*S+x, value=this.board.get(x,y), sprite=this.stoneSprites[y][x];
+        var isStone=value===G.BLACK || value===G.WHITE;
+        if (this.displayedCells[i] !== value) {
+          sprite.visible = isStone;
+          if (isStone) {
+            sprite.fill = value===G.BLACK ? "#151719" : "#f8f4e8";
+            sprite.stroke = value===G.BLACK ? "#000" : "#aaa";
+            sprite.strokeWidth = 2;
+          }
+          this.displayedCells[i] = value;
+        }
+        var key=x+","+y;
+        if (isStone && (key===oldLast || key===newLast || this.displayedCells[i] !== value)) {
+          var hi=key===newLast;
+          sprite.stroke = hi ? "#ff5252" : value===G.BLACK ? "#000" : "#aaa";
+          sprite.strokeWidth = hi ? 5 : 2;
+        }
+      }
+      this.displayedLastKey = newLast;
+    },
     clear: function () {
       this.objects.forEach((o) => o.remove());
       this.objects = [];
@@ -579,39 +629,8 @@ phina.globalize();
     },
     render: function () {
       this.clear();
-      var p = pos(GOAL.x, GOAL.y);
-      this.add(
-        CircleShape({
-          radius: 23,
-          fill: "#ffd600",
-          stroke: "#fff",
-          strokeWidth: 5,
-        })
-          .setPosition(p.x, p.y)
-          .addChildTo(this),
-      );
-      this.add(
-        Label({ text: "Ｇ", fontSize: 24, fill: "#000", fontWeight: "bold" })
-          .setPosition(p.x, p.y)
-          .addChildTo(this),
-      );
-      for (var y = 0; y < S; y++)
-        for (var x = 0; x < S; x++) {
-          var c = this.board.get(x, y);
-          if (c !== G.BLACK && c !== G.WHITE) continue;
-          p = pos(x, y);
-          var hi = this.last && this.last.x === x && this.last.y === y;
-          this.add(
-            CircleShape({
-              radius: 22,
-              fill: c === G.BLACK ? "#151719" : "#f8f4e8",
-              stroke: hi ? "#ff5252" : c === G.BLACK ? "#000" : "#aaa",
-              strokeWidth: hi ? 5 : 2,
-            })
-              .setPosition(p.x, p.y)
-              .addChildTo(this),
-          );
-        }
+      this.updateStoneSprites();
+      var p;
       for (var m of this.branchMarkers) {
         p = pos(m.x, m.y);
         this.add(
@@ -771,6 +790,7 @@ phina.globalize();
     },
     calculateAll: function () {
       this.board = this.normal();
+      this.invalidateStoneDisplay();
       this.target = { x: TARGET.x, y: TARGET.y };
       this.turn = "white";
       this.moveCount = 1;
@@ -930,6 +950,7 @@ phina.globalize();
     reset: function () {
       this.tweener.clear();
       this.board = newBoard();
+      this.invalidateStoneDisplay();
       this.target = { x: TARGET.x, y: TARGET.y };
       this.running = false;
       this.replaying = false;
