@@ -295,23 +295,39 @@
       return turn + "|" + t.x + "," + t.y + "|" + b.cells.join("");
     }
     rank(o) {
-      // 黒は最終結果を最優先。捕獲できる変化を、長く追えるだけの変化より優先する。
+      // 捕獲成功は同格。捕獲不能として確定した失敗理由も同格にする。
       var r = {
         captured: 100,
-        noEscape: 95,
-        blackNone: 60,
-        whiteCanCapture: 35,
-        whiteBranch: 30,
-        obstacle: 25,
-        readLimit: 15,
+        noEscape: 100,
+
+        blackNone: 50,
+        whiteCanCapture: 50,
+        whiteBranch: 50,
+        obstacle: 50,
+        illegal: 50,
+
+        // 深さ上限・循環は結果未確定なので、確定した失敗より下に置く。
+        readLimit: 10,
         cycle: 10,
-        illegal: 5,
       };
       return r[o] === undefined ? -1 : r[o];
     }
     compare(a, b) {
-      var rankA = this.rank(a.outcome), rankB = this.rank(b.outcome);
+      var rankA = this.rank(a.outcome),
+        rankB = this.rank(b.outcome);
+
+      // まず、捕獲成功 > 捕獲不能 > 未確定結果、の順で比較する。
       if (rankA !== rankB) return rankA > rankB ? 1 : -1;
+
+      // 捕獲できる候補同士なら、最短で捕獲できる変化を選ぶ。
+      if (rankA === 100 && a.plies !== b.plies)
+        return a.plies < b.plies ? 1 : -1;
+
+      // 捕獲不能の候補同士なら、最も長くアタリを継続できる変化を選ぶ。
+      if (rankA === 50 && a.plies !== b.plies)
+        return a.plies > b.plies ? 1 : -1;
+
+      // readLimitやcycle同士も、暫定的に長く続いた方を優先する。
       if (a.plies !== b.plies) return a.plies > b.plies ? 1 : -1;
       return 0;
     }
