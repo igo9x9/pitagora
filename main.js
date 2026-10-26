@@ -153,8 +153,6 @@ phina.globalize();
       })
         .setPosition(360, BY + 92)
         .addChildTo(this);
-      this.speedLabel = Label({ text: "速さ", fontSize: 23, fill: "#fff", fontWeight: "bold" })
-        .setPosition(65, BY + 184).addChildTo(this);
       this.slowSpeedButton = btn(this, 205, BY + 184, 130, "ゆっくり", "#607d8b", () => this.setPlaybackSpeed(400));
       this.normalSpeedButton = btn(this, 360, BY + 184, 130, "ふつう", "#607d8b", () => this.setPlaybackSpeed(200));
       this.fastSpeedButton = btn(this, 515, BY + 184, 130, "はやい", "#607d8b", () => this.setPlaybackSpeed(100));
@@ -227,7 +225,7 @@ phina.globalize();
       var f = this.frames[index];
       var wasGoalReached = this.goalReached;
       // 成功フレームだけpi.pngを表示する。1手戻せば自動的に消える。
-      this.goalReached = f.text.indexOf("ゴールだニャ！") === 0;
+      this.goalReached = f.text.indexOf("ゴールだ！") === 0;
       this.replayCurrentIndex = index;
       this.fi = index + 1;
       this.board = new G.GoBoard(S, f.cells);
@@ -243,7 +241,7 @@ phina.globalize();
         var n = 0;
         for (var i = 0; i <= index; i++) {
           var t = this.frames[i].text;
-          if (t === "白が逃げるニャ" || t === "黒が追うニャ") n++;
+          if (t === "白が逃げる" || t === "黒が追う") n++;
         }
         this.catFrame = n % 2 === 0 ? 1 : 2;
         this.setCat(this.catFrame === 1 ? "neko1" : "neko2");
@@ -379,7 +377,7 @@ phina.globalize();
         hole = this.addSpotlightCurtains(goalP.x, goalP.y, C * 2.2, C * 2.2);
         text = "白が「Ｇ」まで来たらゴールです";
       } else {
-        text = "じょうずに石を置いて、\n白をゴールへみちびこう！";
+        text = "じょうずに石を置いて、\n白をゴールへみちびこう！\n\nそうそう、\n途中で黒石が取られたらダメです\n（このゲームだけのルール）";
       }
       if (hole) {
         var frame =
@@ -403,7 +401,17 @@ phina.globalize();
         );
       }
       var uiTop = T + BP + 28;
-      this.addTutorialShade(W / 2, (uiTop + H) / 2, W, H - uiTop, 0.76);
+      // this.addTutorialShade(W / 2, (uiTop + H) / 2, W, H - uiTop, 0.76);
+      var shade = RectangleShape({
+        width: W,
+        height: H - uiTop,
+        fill: "#00B050",
+        stroke: "transparent",
+      })
+        .setPosition(W / 2, (uiTop + H) / 2)
+        .addChildTo(this);
+      shade.alpha = 1;
+      this.addTutorial(shade);
       this.addTutorial(
         Label({
           text: text,
@@ -422,10 +430,10 @@ phina.globalize();
         Label({
           text:
             this.tutorialStep < 3
-              ? "タップして次へニャ"
-              : "タップしてはじめるニャ",
+              ? "タップして次へ"
+              : "タップしてはじめよう！",
           fontSize: 22,
-          fill: "rgba(255,255,255,0.66)",
+          fill: "rgba(255,255,255,1)",
           fontWeight: "bold",
         })
           .setPosition(W / 2, H - 450)
@@ -442,7 +450,7 @@ phina.globalize();
       this.tutorialActive = false;
       this.clearTutorial();
       this.msg.text =
-        "空いてるところをタップするニャ\n白 → 黒 → 空 で変わるニャ";
+        "空いてるところをタップすると\n白 → 黒 → 空 で変わるよ";
       this.updateButtons();
     },
     updateButtons: function () {
@@ -494,7 +502,7 @@ phina.globalize();
         } else {
           this.replayPaused = true;
           this.tweener.clear();
-          this.msg.text = "ちょっと待つニャ";
+          this.msg.text = "ちょっとタイム";
           this.updateButtons();
         }
         return;
@@ -533,7 +541,7 @@ phina.globalize();
       this.clearHints();
       this.last = null;
       this.resetCat();
-      this.msg.text = "石を手直しして、もう一回ニャ！";
+      this.msg.text = "石を手直しして、もう一回！";
       this.render();
       this.updateButtons();
     },
@@ -782,7 +790,7 @@ phina.globalize();
       this.setReplayNavVisible(true);
       this.clearHints();
       this.resetCat();
-      this.msg.text = "最後まで考え中だニャ…";
+      this.msg.text = "最後まで考え中…";
       this.render();
       this.updateButtons();
 
@@ -809,10 +817,10 @@ phina.globalize();
       this.moveCount = 1;
       this.last = null;
       this.clearHints();
-      this.save("スタートだニャ！");
+      this.save("スタートだ！");
 
       var maxMoves = S * S * 4;
-      var resultText = "読みが長すぎるニャ";
+      var resultText = "読みが長すぎる…";
       var success = false;
 
       for (var i = 0; i < maxMoves; i++) {
@@ -825,7 +833,7 @@ phina.globalize();
             if (r.board) { this.board = r.board; this.moveCount++; }
             this.last = r.move || this.last;
             this.clearHints();
-            resultText = "ゴールだニャ！（" + this.moveCount + "手）";
+            resultText = "ゴールだ！（" + this.moveCount + "手）";
             this.goalReached = true;
             this.save(resultText);
             success = true;
@@ -833,47 +841,44 @@ phina.globalize();
           }
           if (r.status === "white-branch" && r.board) {
             this.board = r.board; this.target = r.target; this.last = r.move; this.moveCount++;
-            this.clearHints(); this.save("白が逃げるニャ");
+            this.clearHints(); this.save("白が逃げる");
             var explanation = new G.LadderEngine(this.board, this.target, GOAL).explainBranch(this.board, this.target);
             if (explanation) {
               this.board = explanation.board; this.last = explanation.move; this.branchMarkers = explanation.liberties;
-              // this.save("黒が追ったニャ");
-              resultText = "白の逃げ道が" + explanation.liberties.length + "つあるニャ！";
+              resultText = "白の逃げ道が" + explanation.liberties.length + "つある！";
               this.save(resultText);
             } else {
               var group = this.board.groupAt(this.target.x, this.target.y);
               this.branchMarkers = this.board.playableLiberties(group);
-              // this.save("逃げ道はここだニャ");
-              resultText = "白の逃げ道が" + this.branchMarkers.length + "つあるニャ！";
+              resultText = "白の逃げ道が" + this.branchMarkers.length + "つある！";
               this.save(resultText);
             }
             break;
           }
           if (r.status === "white-branch") {
             this.clearHints(); this.branchMarkers = r.liberties || [];
-            // this.save("白の逃げ道がいっぱいだニャ");
-            resultText = "白の逃げ道が" + r.count + "つあるニャ！";
+            resultText = "白の逃げ道が" + r.count + "つある！";
             this.save(resultText);
             break;
           }
           if (r.status === "white-can-capture") {
-            this.collectCaptureHints(r); this.save("白が黒石を取れるニャ");
-            resultText = "赤枠の黒石も取れちゃうニャ！";
+            this.collectCaptureHints(r); this.save("白が黒石を取れちゃう");
+            resultText = "赤枠の黒石も取れちゃう";
             this.save(resultText);
             break;
           }
           if (r.status !== "ok") {
-            resultText = ({ obstacle:"シチョウが続かないニャ", "no-escape":"白はもう逃げられないニャ", captured:"白はもう逃げられないニャ", illegal:"白はそこに打てないニャ" })[r.status] || "白が止まったニャ";
+            resultText = ({ obstacle:"シチョウが続かない", "no-escape":"白はもう逃げられない", captured:"白はもう逃げられない", illegal:"白はそこに打てない" })[r.status] || "白が止まった";
             this.save(resultText);
             break;
           }
           this.board = r.board; this.target = r.target; this.turn = "black"; this.last = r.move; this.moveCount++;
-          this.clearHints(); this.save("白が逃げるニャ");
+          this.clearHints(); this.save("白が逃げる");
         } else {
           r = engine.chooseBlack();
-          if (r.status !== "ok") { resultText = "黒はアタリを続けられないニャ"; this.save(resultText); break; }
+          if (r.status !== "ok") { resultText = "黒はアタリを続けられない"; this.save(resultText); break; }
           this.board = r.board; this.target = r.target; this.turn = "white"; this.last = r.move; this.moveCount++;
-          this.clearHints(); this.save("黒が追うニャ");
+          this.clearHints(); this.save("黒が追う");
         }
       }
 
@@ -916,7 +921,7 @@ phina.globalize();
     showGoalCelebration: function () {
       var center = pos(GOAL.x, GOAL.y);
       var colors = ["#ffd600", "#ff5252", "#42a5f5", "#ffffff"];
-      var count = 12;
+      var count = 24;
 
       // G周辺だけに小さな色粒を飛ばす控えめな祝福演出。
       for (let i = 0; i < count; i++) {
@@ -934,7 +939,6 @@ phina.globalize();
               x: center.x + Math.cos(angle) * distance,
               y: center.y + Math.sin(angle) * distance,
             }, 800, "easeOutQuad")
-          .wait(100)
           .to({
             alpha: 0,
             scaleX: 0.5,
@@ -1022,7 +1026,7 @@ phina.globalize();
       this.last = null;
       this.resetCat();
       this.msg.text =
-        "空いてるところをタップするニャ\n白 → 黒 → 空 で変わるニャ";
+        "空いてるところをタップすると\n白 → 黒 → 空 で変わるよ";
       this.render();
       this.updateButtons();
     },
