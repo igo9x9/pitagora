@@ -115,6 +115,9 @@ phina.globalize();
       this.stoneSprites = [];
       this.displayedCells = Array(S * S).fill(-1);
       this.displayedLastKey = "";
+      this.storageKey = "pitagora-shicho-board-v1";
+      this.workMenuOpen = false;
+      this.workMenuObjects = [];
       this.base = DisplayElement().addChildTo(this);
       this.drawBase();
       this.createBoardSprites();
@@ -127,18 +130,12 @@ phina.globalize();
         .setPosition(380, MY)
         .addChildTo(this);
       this.catSprite = Sprite("neko1").addChildTo(this).setPosition(82, MY);
-      // 左：進行操作（スタート / 一時停止 / 再開 / リプレイ）
-      this.startButton = btn(this, 150, BY, 190, "スタート", "#ef6c00", () =>
-        this.primaryAction(),
-      );
-      // 中央：手直し
-      this.resetButton = btn(this, 360, BY, 170, "手直し", "#1976d2", () =>
-        this.editAgain(),
-      );
-      // 右：全消去
-      this.replayButton = btn(this, 570, BY, 170, "全消去", "#607d8b", () =>
-        this.reset(),
-      );
+      // 4つの操作を横一列に配置。右端の細い「⋮」は作品メニュー。
+      this.startButton = btn(this, 115, BY, 180, "スタート", "#ef6c00", () => this.primaryAction());
+      this.resetButton = btn(this, 310, BY, 160, "手直し", "#1976d2", () => this.editAgain());
+      this.replayButton = btn(this, 485, BY, 150, "全消去", "#607d8b", () => this.reset());
+      this.workButton = btn(this, 655, BY, 70, "⋮", "#455a64", () => this.toggleWorkMenu());
+      if (this.workButton.buttonLabel) this.workButton.buttonLabel.fontSize = 34;
       this.prevReplayButton = btn(this, 255, BY + 92, 84, "◀", "#455a64", () =>
         this.stepReplay(-1),
       );
@@ -168,6 +165,101 @@ phina.globalize();
       };
       this.render();
       this.showTutorialStep();
+    },
+    toggleWorkMenu: function () {
+      if (this.tutorialActive || this.running || this.replaying) return;
+      if (this.workMenuOpen) this.closeWorkMenu();
+      else this.openWorkMenu();
+    },
+    openWorkMenu: function () {
+      this.closeWorkMenu();
+      this.workMenuOpen = true;
+
+      var panel = RectangleShape({
+        width: 340, height: 290, cornerRadius: 18,
+        fill: "rgba(20,35,45,0.96)", stroke: "#fff", strokeWidth: 4,
+      }).setPosition(W / 2, 850).addChildTo(this);
+      this.workMenuObjects.push(panel);
+
+      var saveButton = btn(this, W / 2, 770, 280, "この配置を保存", "#ef6c00", () => {
+        this.saveBoardToLocalStorage();
+        this.closeWorkMenu();
+      });
+      var loadButton = btn(this, W / 2, 850, 280, "保存した配置を読込", "#1976d2", () => {
+        this.loadBoardFromLocalStorage();
+        this.closeWorkMenu();
+      });
+      var closeButton = btn(this, W / 2, 930, 280, "閉じる", "#607d8b", () =>
+        this.closeWorkMenu(),
+      );
+      this.workMenuObjects.push(saveButton, loadButton, closeButton);
+    },
+    closeWorkMenu: function () {
+      this.workMenuObjects.forEach((o) => o.remove());
+      this.workMenuObjects = [];
+      this.workMenuOpen = false;
+    },
+    serializeBoardForStorage: function () {
+      // INIT/Gは復元時に正規化するので、現在の編集盤面をそのまま保存してよい。
+      return {
+        version: 1,
+        size: S,
+        cells: this.board.cells.slice(),
+        savedAt: new Date().toISOString(),
+      };
+    },
+    saveBoardToLocalStorage: function () {
+      if (!this.canStart || this.running || this.replaying) return;
+      try {
+        localStorage.setItem(this.storageKey, JSON.stringify(this.serializeBoardForStorage()));
+        this.msg.text = "この配置を保存したよ";
+      } catch (e) {
+        console.error("盤面の保存に失敗", e);
+        this.msg.text = "保存できなかった…";
+      }
+    },
+    loadBoardFromLocalStorage: function () {
+      try {
+        var raw = localStorage.getItem(this.storageKey);
+        if (!raw) {
+          this.msg.text = "保存した配置がないよ";
+          return;
+        }
+        var data = JSON.parse(raw);
+        if (!data || data.version !== 1 || data.size !== S || !Array.isArray(data.cells) || data.cells.length !== S * S)
+          throw new Error("保存データの形式が違います");
+
+        var loaded = new G.GoBoard(S, data.cells);
+        this.board = loaded;
+        // 固定初期石、発火前の空点、Gを現在ルールに合わせて正規化する。
+        INIT.forEach((stone) => this.board.set(stone.x, stone.y, stone.c));
+        this.board.set(TARGET.x, TARGET.y - 1, G.EMPTY);
+        this.board.set(GOAL.x, GOAL.y, G.EMPTY);
+
+        this.invalidateStoneDisplay();
+        this.target = { x: TARGET.x, y: TARGET.y };
+        this.turn = "white";
+        this.running = false;
+        this.replaying = false;
+        this.replayPaused = false;
+        this.canStart = true;
+        this.editBoard = null;
+        this.frames = [];
+        this.simulationResult = null;
+        this.goalReached = false;
+        this.piAnimating = false;
+        this.replayCurrentIndex = -1;
+        this.setReplayNavVisible(false);
+        this.clearHints();
+        this.last = null;
+        this.resetCat();
+        this.msg.text = "保存した配置を読み込んだよ";
+        this.render();
+        this.updateButtons();
+      } catch (e) {
+        console.error("盤面の読込に失敗", e);
+        this.msg.text = "読み込めなかった…";
+      }
     },
     setReplayNavVisible: function (visible) {
       this.replayNavVisible = visible;
@@ -377,7 +469,7 @@ phina.globalize();
         hole = this.addSpotlightCurtains(goalP.x, goalP.y, C * 2.2, C * 2.2);
         text = "白が「Ｇ」まで来たらゴールです";
       } else {
-        text = "じょうずに石を置いて、\n白をゴールへみちびこう！\n\nそうそう、\n途中で黒石が取られたらダメです\n（このゲームだけのルール）";
+        text = "好きな場所に石を置いて、\n白石をゴールへみちびこう！\n\nこのゲームの特別ルールとして、\n途中で黒石が取られたらダメです";
       }
       if (hole) {
         var frame =
@@ -489,6 +581,12 @@ phina.globalize();
         this.resetButton.setInteractive(false);
         this.replayButton.setInteractive(false);
       }
+      var workEnabled = !this.tutorialActive && !this.running && !this.replaying && this.canStart;
+      if (this.workButton) {
+        this.workButton.alpha = workEnabled ? 1 : 0.45;
+        this.workButton.setInteractive(workEnabled);
+      }
+      if (!workEnabled && this.workMenuOpen) this.closeWorkMenu();
       this.updateReplayCounter();
     },
     primaryAction: function () {
@@ -522,6 +620,7 @@ phina.globalize();
       this.playFrame();
     },
     editAgain: function () {
+      this.closeWorkMenu();
       if (this.running || !this.editBoard) return;
       // 再生中・一時停止中・一手送り/戻し中でも即座に編集へ戻る。
       this.tweener.clear();
@@ -776,6 +875,7 @@ phina.globalize();
       });
     },
     start: function () {
+      this.closeWorkMenu();
       if (this.running || this.replaying || !this.canStart) return;
       this.editBoard = this.board.clone();
       this.canStart = false;
@@ -1007,6 +1107,7 @@ phina.globalize();
       this.tweener.clear().wait(this.playbackInterval).call(() => this.playFrame());
     },
     reset: function () {
+      this.closeWorkMenu();
       this.tweener.clear();
       this.board = newBoard();
       this.invalidateStoneDisplay();
