@@ -159,7 +159,11 @@
       }
       var m = pl[0],
         r = b.play(m.x, m.y, WHITE);
-      if (!r) return { status: "illegal" };
+      if (!r) return {
+        status: "no-escape",
+        count: 0,
+        liberties: [],
+      };
       var eg = r.board.groupAt(m.x, m.y),
         next = this.playable(r.board, eg);
       if (checkGoal && this.containsGoal(eg))
@@ -247,11 +251,22 @@
         if (!r) continue;
         var ng = this.targetGroup(r.board, t);
 
-        // 黒を置いた結果、白が本当にアタリになる手だけを候補にする。
-        if (!ng || ng.liberties.length !== 1) continue;
+        // この一手で対象の白石を取り切った場合も黒候補に含める。
+        // 白石が消えるとngはnullになるため、アタリ判定より先に扱う。
+        if (!ng) {
+          out.push({
+            move: m,
+            board: r.board,
+            target: t,
+            immediateCapture: true,
+          });
+          continue;
+        }
+
+        // 白が残る場合は、本当にアタリになる手だけを候補にする。
+        if (ng.liberties.length !== 1) continue;
         if (this.playable(r.board, ng).length !== 1) continue;
 
-        // 直後だけでなく、白が唯一の逃げ手を打った後も検査する。
         var safety = this.blackCandidateSafety(r.board, t);
         if (!safety.safe) {
           console.debug("黒候補を除外", {
@@ -261,7 +276,12 @@
           continue;
         }
 
-        out.push({ move: m, board: r.board, target: t });
+        out.push({
+          move: m,
+          board: r.board,
+          target: t,
+          immediateCapture: false,
+        });
       }
       return out;
     }
@@ -392,16 +412,28 @@
     }
     chooseBlack() {
       var cs = this.blackCandidates(this.board, this.target);
-      if (!cs.length) return { status: "black-none" };
-      var inc = this.incoming(this.board, this.target),
-        ev = cs.map((c) => {
-          var f = this.read(c.board, c.target, "white", Object.create(null), 0);
-          return {
-            candidate: c,
-            result: { outcome: f.outcome, plies: f.plies + 1 },
-            ds: this.direction(c, inc),
-          };
-        });
+      if (!cs.length) {
+        console.groupCollapsed("[LadderEngine] 黒候補なし");
+        console.log("target", this.target);
+        console.log("targetGroup", this.targetGroup(this.board, this.target));
+        console.groupEnd();
+        return { status: "black-none" };
+      }
+
+      var inc = this.incoming(this.board, this.target);
+      var ev = cs.map((c) => {
+        // 即時捕獲は再帰読みに任せず、その場でcapturedと確定する。
+        var f = c.immediateCapture
+          ? { outcome: "captured", plies: 0 }
+          : this.read(c.board, c.target, "white", Object.create(null), 0);
+        var evaluation = {
+          candidate: c,
+          result: { outcome: f.outcome, plies: f.plies + 1 },
+          ds: c.immediateCapture ? 0 : this.direction(c, inc),
+        };
+        return evaluation;
+      });
+
       ev.sort((a, b) => {
         var r = this.compare(a.result, b.result);
         if (r) return -r;
@@ -410,7 +442,40 @@
           return a.candidate.move.y - b.candidate.move.y;
         return a.candidate.move.x - b.candidate.move.x;
       });
+
       var z = ev[0];
+
+      // 原因調査用ログ。1回の黒番を折りたたんで確認できる。
+      console.groupCollapsed(
+        "[LadderEngine] 黒手選択 target=(" +
+          this.target.x +
+          "," +
+          this.target.y +
+          ") candidates=" +
+          ev.length,
+      );
+      console.table(
+        ev.map((item, index) => ({
+          selected: index === 0 ? "YES" : "",
+          x: item.candidate.move.x,
+          y: item.candidate.move.y,
+          immediateCapture: !!item.candidate.immediateCapture,
+          outcome: item.result.outcome,
+          plies: item.result.plies,
+          rank: this.rank(item.result.outcome),
+          direction: item.ds,
+        })),
+      );
+      console.log("selected", {
+        move: z.candidate.move,
+        immediateCapture: !!z.candidate.immediateCapture,
+        outcome: z.result.outcome,
+        plies: z.result.plies,
+        direction: z.ds,
+      });
+      console.log("targetGroup before move", this.targetGroup(this.board, this.target));
+      console.groupEnd();
+
       return {
         status: "ok",
         move: z.candidate.move,
