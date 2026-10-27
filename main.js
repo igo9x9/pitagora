@@ -126,6 +126,29 @@ phina.globalize();
         .addChildTo(this);
     },
   });
+  phina.define("WorkMenuScene", {
+    superClass: "DisplayScene",
+    init: function (options) {
+      this.superInit({ width: W, height: H });
+      options = options || {};
+      this.backgroundColor = "rgba(0,0,0,0.15)";
+      RectangleShape({
+        width: 350, height: 370, cornerRadius: 18,
+        fill: "rgba(20,35,45,0.96)", stroke: "#fff", strokeWidth: 4,
+      }).setPosition(W / 2, 815).addChildTo(this);
+      var menuButton = (y, text, color, action) => {
+        var button = btn(this, W / 2, y, 280, text, color, () => {});
+        button.onpointend = () => {
+          if (action) action();
+          setTimeout(() => this.app.popScene(), 0);
+        };
+      };
+      menuButton(700, "この配置を保存", "#ef6c00", options.onSave);
+      menuButton(780, "保存した配置を読込", "#1976d2", options.onLoad);
+      menuButton(860, "共有リンクをコピー", "#4A4A44", options.onShare);
+      menuButton(940, "閉じる", "#607d8b", null);
+    },
+  });
   phina.define("MainScene", {
     superClass: "DisplayScene",
     init: function () {
@@ -141,6 +164,9 @@ phina.globalize();
       this.editBoard = null;
       this.objects = [];
       this.frames = [];
+      this.runMoves = [];
+      this.previousRunMoves = null;
+      this.compareAfterEdit = false;
       this.branchMarkers = [];
       this.captureMoves = [];
       this.captureStones = [];
@@ -223,40 +249,19 @@ phina.globalize();
     },
     toggleWorkMenu: function () {
       if (this.tutorialActive || this.running || this.replaying) return;
-      if (this.workMenuOpen) this.closeWorkMenu();
-      else this.openWorkMenu();
+      this.openWorkMenu();
     },
     openWorkMenu: function () {
-      this.closeWorkMenu();
-      this.workMenuOpen = true;
-
-      var panel = RectangleShape({
-        width: 350, height: 370, cornerRadius: 18,
-        fill: "rgba(20,35,45,0.96)", stroke: "#fff", strokeWidth: 4,
-      }).setPosition(W / 2, 815).addChildTo(this);
-      this.workMenuObjects.push(panel);
-
-      var saveButton = btn(this, W / 2, 700, 280, "この配置を保存", "#ef6c00", () => {
-        this.saveBoardToLocalStorage();
-        this.closeWorkMenu();
-      });
-      var loadButton = btn(this, W / 2, 780, 280, "保存した配置を読込", "#1976d2", () => {
-        this.loadBoardFromLocalStorage();
-        this.closeWorkMenu();
-      });
-      var shareButton = btn(this, W / 2, 860, 280, "共有リンクをコピー", "#4A4A44", () => {
-        this.copyShareUrl();
-        this.closeWorkMenu();
-      });
-      var closeButton = btn(this, W / 2, 940, 280, "閉じる", "#607d8b", () =>
-        this.closeWorkMenu(),
-      );
-      this.workMenuObjects.push(saveButton, loadButton, shareButton, closeButton);
+      if (!this.app) return;
+      var mainScene = this;
+      this.app.pushScene(WorkMenuScene({
+        onSave: function () { mainScene.saveBoardToLocalStorage(); },
+        onLoad: function () { mainScene.loadBoardFromLocalStorage(); },
+        onShare: function () { mainScene.copyShareUrl(); },
+      }));
     },
     closeWorkMenu: function () {
-      this.workMenuObjects.forEach((o) => o.remove());
-      this.workMenuObjects = [];
-      this.workMenuOpen = false;
+      // 互換用：作品メニューは専用SceneなのでMainScene側では処理不要。
     },
     normalizeBoardForEditing: function (board) {
       INIT.forEach((stone) => board.set(stone.x, stone.y, stone.c));
@@ -344,6 +349,9 @@ phina.globalize();
         this.canStart = true;
         this.editBoard = null;
         this.frames = [];
+        this.runMoves = [];
+        this.previousRunMoves = null;
+        this.compareAfterEdit = false;
         this.simulationResult = null;
         this.goalReached = false;
         this.piAnimating = false;
@@ -687,7 +695,6 @@ phina.globalize();
         this.workButton.alpha = workEnabled ? 1 : 0.45;
         this.workButton.setInteractive(workEnabled);
       }
-      if (!workEnabled && this.workMenuOpen) this.closeWorkMenu();
       this.updateReplayCounter();
     },
     primaryAction: function () {
@@ -731,6 +738,8 @@ phina.globalize();
       this.replaying = false;
       this.replayPaused = false;
       this.canStart = true;
+      this.previousRunMoves = this.runMoves.map((m) => ({ color:m.color, x:m.x, y:m.y }));
+      this.compareAfterEdit = this.previousRunMoves.length > 0;
       this.frames = [];
       this.goalReached = false;
       this.piAnimating = false;
@@ -1175,6 +1184,22 @@ phina.globalize();
         text: text,
       });
     },
+    recordRunMove: function (color, move) {
+      if (move) this.runMoves.push({ color: color, x: move.x, y: move.y });
+    },
+    commonMoveCount: function (a, b) {
+      if (!a || !b) return 0;
+      var i = 0, n = Math.min(a.length, b.length);
+      while (i < n && a[i].color === b[i].color && a[i].x === b[i].x && a[i].y === b[i].y) i++;
+      return i;
+    },
+    replayStartIndexAfterEdit: function () {
+      if (!this.compareAfterEdit || !this.previousRunMoves) return 0;
+      var common = this.commonMoveCount(this.previousRunMoves, this.runMoves);
+      var index = Math.max(0, common - 6);
+      console.debug("[Replay] 手直し前後の比較", { previousMoves:this.previousRunMoves.length, currentMoves:this.runMoves.length, commonMoves:common, replayStartIndex:index });
+      return Math.min(index, Math.max(0, this.frames.length - 1));
+    },
     start: function () {
       this.closeWorkMenu();
       if (this.running || this.replaying || !this.canStart) return;
@@ -1184,6 +1209,7 @@ phina.globalize();
       this.replaying = false;
       this.replayPaused = false;
       this.frames = [];
+      this.runMoves = [];
       this.simulationResult = null;
       this.goalReached = false;
       this.piAnimating = false;
@@ -1232,6 +1258,7 @@ phina.globalize();
           if (r.status === "goal") {
             if (r.board) { this.board = r.board; this.moveCount++; }
             this.last = r.move || this.last;
+            this.recordRunMove(G.WHITE, r.move);
             this.clearHints();
             resultText = "ゴール！（" + this.moveCount + "手）";
             this.goalReached = true;
@@ -1241,10 +1268,12 @@ phina.globalize();
           }
           if (r.status === "white-branch" && r.board) {
             this.board = r.board; this.target = r.target; this.last = r.move; this.moveCount++;
+            this.recordRunMove(G.WHITE, r.move);
             this.clearHints(); this.save("白が逃げる");
             var explanation = new G.LadderEngine(this.board, this.target, GOAL).explainBranch(this.board, this.target);
             if (explanation) {
               this.board = explanation.board; this.last = explanation.move; this.branchMarkers = explanation.liberties;
+              this.recordRunMove(G.BLACK, explanation.move);
               resultText = "白の逃げ道が" + explanation.liberties.length + "つある！";
               this.save(resultText);
             } else {
@@ -1263,7 +1292,7 @@ phina.globalize();
           }
           if (r.status === "white-can-capture") {
             this.collectCaptureHints(r);
-            resultText = "白が黒石を取れちゃう";
+            resultText = "白が黒石を取れちゃう！";
             this.save(resultText);
             break;
           }
@@ -1273,11 +1302,13 @@ phina.globalize();
             break;
           }
           this.board = r.board; this.target = r.target; this.turn = "black"; this.last = r.move; this.moveCount++;
+          this.recordRunMove(G.WHITE, r.move);
           this.clearHints(); this.save("白が逃げる");
         } else {
           r = engine.chooseBlack();
           if (r.status !== "ok") { resultText = "黒はアタリを続けられない！"; this.save(resultText); break; }
           this.board = r.board; this.target = r.target; this.turn = "white"; this.last = r.move; this.moveCount++;
+          this.recordRunMove(G.BLACK, r.move);
           this.clearHints(); this.save("黒が追う");
         }
       }
@@ -1286,8 +1317,11 @@ phina.globalize();
       this.running = false;
       this.replaying = true;
       this.replayPaused = false;
-      this.fi = 0;
-      this.replayCurrentIndex = -1;
+      var replayStart = this.replayStartIndexAfterEdit();
+      this.fi = replayStart;
+      this.replayCurrentIndex = replayStart - 1;
+      this.previousRunMoves = this.runMoves.map((m) => ({ color:m.color, x:m.x, y:m.y }));
+      this.compareAfterEdit = false;
       this.updateButtons();
       this.playFrame();
     },
@@ -1413,6 +1447,9 @@ phina.globalize();
       this.canStart = true;
       this.editBoard = null;
       this.frames = [];
+      this.runMoves = [];
+      this.previousRunMoves = null;
+      this.compareAfterEdit = false;
       this.simulationResult = null;
       this.goalReached = false;
       this.piAnimating = false;
