@@ -790,7 +790,7 @@ phina.globalize();
         var dx = x - from.x;
         var dy = y - from.y;
         var length = Math.hypot(dx, dy);
-        var distance = 16;
+        var distance = 30;
         if (length > 0) {
           sprite.x = destination.x - (dx / length) * distance;
           sprite.y = destination.y - (dy / length) * distance;
@@ -801,7 +801,7 @@ phina.globalize();
         sprite.scaleY = 0.95;
         sprite.tweener
           // ずらした初期位置を、少なくとも1回は画面に描画させる
-          .wait(10)
+          // .wait(10)
           .to(
             {
               x: destination.x,
@@ -809,7 +809,7 @@ phina.globalize();
               scaleX: 1.12,
               scaleY: 1.12,
             },
-            90,
+            150,
             "easeOutQuad"
           )
           .to({ scaleX: 1, scaleY: 1 }, 10, "easeOutQuad")
