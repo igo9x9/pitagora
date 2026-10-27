@@ -267,14 +267,14 @@
         if (ng.liberties.length !== 1) continue;
         if (this.playable(r.board, ng).length !== 1) continue;
 
-        var safety = this.blackCandidateSafety(r.board, t);
-        if (!safety.safe) {
-          console.debug("黒候補を除外", {
-            move: m,
-            reason: safety.reason,
-          });
-          continue;
-        }
+        // var safety = this.blackCandidateSafety(r.board, t);
+        // if (!safety.safe) {
+        //   console.debug("黒候補を除外", {
+        //     move: m,
+        //     reason: safety.reason,
+        //   });
+        //   continue;
+        // }
 
         out.push({
           move: m,
