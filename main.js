@@ -328,9 +328,10 @@ phina.globalize();
       this.captureStones = f.captureStones || [];
       this.msg.text = f.text;
       if (this.goalReached) this.showHappyCat();
-      else if (index === this.frames.length - 1)
+      else if (index === this.frames.length - 1) {
+        SoundManager.play('failSound');
         this.showSadCat();
-      else {
+      } else {
         var n = 0;
         for (var i = 0; i <= index; i++) {
           var t = this.frames[i].text;
@@ -1288,7 +1289,8 @@ phina.globalize();
         sound: {
           blackSound: "black.mp3",
           whiteSound: "white.mp3",
-          goalSound: "goal.mp3"
+          goalSound: "goal.mp3",
+          failSound: "failed.mp3"
         },
       },
     }).run();
