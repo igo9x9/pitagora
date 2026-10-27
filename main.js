@@ -53,11 +53,58 @@ phina.globalize();
   function clonePoints(a) {
     return (a || []).map((p) => ({ x: p.x, y: p.y }));
   }
+  function encodeBoardCells(cells) {
+    var bytes = [];
+    for (var i = 0; i < cells.length; i += 4) {
+      var byte = 0;
+      for (var j = 0; j < 4; j++) {
+        var v = cells[i + j] === G.BLACK ? 1 : cells[i + j] === G.WHITE ? 2 : 0;
+        byte |= v << (j * 2);
+      }
+      bytes.push(byte);
+    }
+    var binary = String.fromCharCode.apply(null, bytes);
+    return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+  }
+  function decodeBoardCells(payload) {
+    var base64 = payload.replace(/-/g, "+").replace(/_/g, "/");
+    while (base64.length % 4) base64 += "=";
+    var binary = atob(base64);
+    var cells = [];
+    for (var i = 0; i < binary.length; i++) {
+      var byte = binary.charCodeAt(i);
+      for (var j = 0; j < 4 && cells.length < S * S; j++) {
+        var v = (byte >> (j * 2)) & 3;
+        if (v === 3) throw new Error("共有データに不正な値があります");
+        cells.push(v === 1 ? G.BLACK : v === 2 ? G.WHITE : G.EMPTY);
+      }
+    }
+    if (cells.length !== S * S) throw new Error("共有データの長さが違います");
+    return cells;
+  }
+  function readSharedBoardFromUrl() {
+    try {
+      var raw = new URLSearchParams(window.location.search).get("p");
+      if (!raw) return null;
+      var parts = raw.split(".");
+      if (parts.length !== 2 || parts[0] !== "1") throw new Error("未対応の共有形式です");
+      return { version: 1, size: S, cells: decodeBoardCells(parts[1]) };
+    } catch (e) {
+      console.warn("共有盤面を読み込めませんでした", e);
+      return null;
+    }
+  }
+  var SHARED_BOARD = readSharedBoardFromUrl();
   phina.define("TitleScene", {
     superClass: "DisplayScene",
+    nextLabel: "main",
     init: function () {
       this.superInit({ width: W, height: H });
       this.backgroundColor = "#159447";
+      if (SHARED_BOARD) {
+        this.tweener.wait(1).call(() => this.exit("main"));
+        return;
+      }
 
       // タイトル画像
       var titleLogo = Sprite("titleLogo")
@@ -114,6 +161,19 @@ phina.globalize();
       this.storageKey = "pitagora-shicho-board-v1";
       this.workMenuOpen = false;
       this.workMenuObjects = [];
+      // 編集時の短押し/長押し判定用。短押し=白、350ms長押し=黒。
+      this.placePress = null;
+      this.placePressThreshold = 250;
+      this.placePressCancelDistance = 32;
+      this.sharedBoardLoaded = false;
+      if (SHARED_BOARD) {
+        this.board = new G.GoBoard(S, SHARED_BOARD.cells);
+        INIT.forEach((stone) => this.board.set(stone.x, stone.y, stone.c));
+        this.board.set(TARGET.x, TARGET.y - 1, G.EMPTY);
+        this.board.set(GOAL.x, GOAL.y, G.EMPTY);
+        this.tutorialActive = false;
+        this.sharedBoardLoaded = true;
+      }
       this.base = DisplayElement().addChildTo(this);
       this.drawBase();
       this.createBoardSprites();
@@ -125,6 +185,9 @@ phina.globalize();
       })
         .setPosition(W / 2, MY)
         .addChildTo(this);
+      if (this.sharedBoardLoaded) {
+        this.msg.text = "共有された配置です。どう動くかな？";
+      }
       // 4つの操作を横一列に配置。右端の細い「⋮」は作品メニュー。
       this.startButton = btn(this, 115, BY, 180, "スタート", "#ef6c00", () => this.primaryAction());
       this.resetButton = btn(this, 310, BY, 160, "手直し", "#1976d2", () => this.editAgain());
@@ -147,7 +210,13 @@ phina.globalize();
           this.nextTutorial();
           return;
         }
-        this.tap(e.pointer.x, e.pointer.y);
+        this.beginPlacementPress(e.pointer.x, e.pointer.y);
+      };
+      this.onpointmove = (e) => {
+        this.movePlacementPress(e.pointer.x, e.pointer.y);
+      };
+      this.onpointend = (e) => {
+        this.endPlacementPress(e.pointer.x, e.pointer.y);
       };
       this.render();
       this.showTutorialStep();
@@ -162,28 +231,74 @@ phina.globalize();
       this.workMenuOpen = true;
 
       var panel = RectangleShape({
-        width: 340, height: 290, cornerRadius: 18,
+        width: 350, height: 370, cornerRadius: 18,
         fill: "rgba(20,35,45,0.96)", stroke: "#fff", strokeWidth: 4,
-      }).setPosition(W / 2, 850).addChildTo(this);
+      }).setPosition(W / 2, 815).addChildTo(this);
       this.workMenuObjects.push(panel);
 
-      var saveButton = btn(this, W / 2, 770, 280, "この配置を保存", "#ef6c00", () => {
+      var saveButton = btn(this, W / 2, 700, 280, "この配置を保存", "#ef6c00", () => {
         this.saveBoardToLocalStorage();
         this.closeWorkMenu();
       });
-      var loadButton = btn(this, W / 2, 850, 280, "保存した配置を読込", "#1976d2", () => {
+      var loadButton = btn(this, W / 2, 780, 280, "保存した配置を読込", "#1976d2", () => {
         this.loadBoardFromLocalStorage();
         this.closeWorkMenu();
       });
-      var closeButton = btn(this, W / 2, 930, 280, "閉じる", "#607d8b", () =>
+      var shareButton = btn(this, W / 2, 860, 280, "共有リンクをコピー", "#4A4A44", () => {
+        this.copyShareUrl();
+        this.closeWorkMenu();
+      });
+      var closeButton = btn(this, W / 2, 940, 280, "閉じる", "#607d8b", () =>
         this.closeWorkMenu(),
       );
-      this.workMenuObjects.push(saveButton, loadButton, closeButton);
+      this.workMenuObjects.push(saveButton, loadButton, shareButton, closeButton);
     },
     closeWorkMenu: function () {
       this.workMenuObjects.forEach((o) => o.remove());
       this.workMenuObjects = [];
       this.workMenuOpen = false;
+    },
+    normalizeBoardForEditing: function (board) {
+      INIT.forEach((stone) => board.set(stone.x, stone.y, stone.c));
+      board.set(TARGET.x, TARGET.y - 1, G.EMPTY);
+      board.set(GOAL.x, GOAL.y, G.EMPTY);
+      return board;
+    },
+    createShareUrl: function () {
+      if (!this.canStart || this.running || this.replaying) return null;
+      var cells = this.board.cells.slice();
+      var payload = "1." + encodeBoardCells(cells);
+      var url = new URL(window.location.href);
+      url.searchParams.set("p", payload);
+      return url.toString();
+    },
+    copyShareUrl: function () {
+      var url = this.createShareUrl();
+      if (!url) return;
+      var done = () => { this.msg.text = "共有リンクをコピーしたよ"; };
+      var failed = (e) => {
+        console.error("共有リンクのコピーに失敗", e);
+        this.msg.text = "リンクをコピーできなかった…";
+      };
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(url).then(done).catch(() => this.copyTextFallback(url, done, failed));
+      } else {
+        this.copyTextFallback(url, done, failed);
+      }
+    },
+    copyTextFallback: function (text, done, failed) {
+      try {
+        var area = document.createElement("textarea");
+        area.value = text;
+        area.style.position = "fixed";
+        area.style.opacity = "0";
+        document.body.appendChild(area);
+        area.focus();
+        area.select();
+        if (!document.execCommand("copy")) throw new Error("copy command failed");
+        area.remove();
+        done();
+      } catch (e) { failed(e); }
     },
     serializeBoardForStorage: function () {
       // INIT/Gは復元時に正規化するので、現在の編集盤面をそのまま保存してよい。
@@ -218,9 +333,7 @@ phina.globalize();
         var loaded = new G.GoBoard(S, data.cells);
         this.board = loaded;
         // 固定初期石、発火前の空点、Gを現在ルールに合わせて正規化する。
-        INIT.forEach((stone) => this.board.set(stone.x, stone.y, stone.c));
-        this.board.set(TARGET.x, TARGET.y - 1, G.EMPTY);
-        this.board.set(GOAL.x, GOAL.y, G.EMPTY);
+        this.normalizeBoardForEditing(this.board);
 
         this.invalidateStoneDisplay();
         this.target = { x: TARGET.x, y: TARGET.y };
@@ -530,7 +643,7 @@ phina.globalize();
       this.tutorialActive = false;
       this.clearTutorial();
       this.msg.text =
-        "空いてるところをタップすると\n白 → 黒 → 空 で変わるよ";
+        "タップして白、長押しで黒だよ";
       this.updateButtons();
     },
     updateButtons: function () {
@@ -690,6 +803,15 @@ phina.globalize();
           stroke: null,
       }).addChildTo(this);
       this.lastMoveMarker.visible = false;
+      // 長押し中の着手点を指の外側から確認できる大きなリング。
+      this.placementRing = CircleShape({
+        radius: 100,
+        fill: "transparent",
+        stroke: "#ffffff",
+        strokeWidth: 5,
+      }).addChildTo(this);
+      this.placementRing.visible = false;
+      this.placementRing.alpha = 0.9;
     },
     invalidateStoneDisplay: function () {
       this.displayedCells = Array(S * S).fill(-1);
@@ -925,29 +1047,109 @@ phina.globalize();
       this.captureMoves = [];
       this.captureStones = [];
     },
-    tap: function (px, py) {
+    editablePointAt: function (px, py) {
       if (
-        this.running ||
-        this.replaying ||
-        py < T - C / 2 ||
-        py > T + BP + C / 2 ||
-        px < L - C / 2 ||
-        px > L + BP + C / 2
-      )
-        return;
+        this.running || this.replaying || !this.canStart ||
+        py < T - C / 2 || py > T + BP + C / 2 ||
+        px < L - C / 2 || px > L + BP + C / 2
+      ) return null;
       var x = Math.round((px - L) / C),
         y = Math.round((py - T) / C);
-      if (this.fixed(x, y)) return;
+      if (this.fixed(x, y)) return null;
       var p = pos(x, y);
-      if (Math.hypot(px - p.x, py - p.y) > C * 0.45) return;
-      var v = this.board.get(x, y);
-      this.board.set(
-        x,
-        y,
-        v === G.EMPTY ? G.WHITE : v === G.WHITE ? G.BLACK : G.EMPTY,
-      );
+      if (Math.hypot(px - p.x, py - p.y) > C * 0.45) return null;
+      return { x: x, y: y, p: p, value: this.board.get(x, y) };
+    },
+    beginPlacementPress: function (px, py) {
+      var hit = this.editablePointAt(px, py);
+      if (!hit) return;
+
+      // 既存石は従来より単純に、タップで削除する。
+      if (hit.value === G.BLACK || hit.value === G.WHITE) {
+        this.placePress = {
+          x: hit.x, y: hit.y, startX: px, startY: py,
+          originalValue: hit.value, existingStone: true, canceled: false,
+        };
+        return;
+      }
+
+      // 空点では押した瞬間に白石を仮表示する。
+      this.board.set(hit.x, hit.y, G.WHITE);
       this.frames = [];
       this.clearHints();
+      this.render();
+      this.placementRing.x = hit.p.x;
+      this.placementRing.y = hit.p.y;
+      this.placementRing.stroke = "#ffffff";
+      this.placementRing.strokeWidth = 7;
+      this.placementRing.scaleX = 0.85;
+      this.placementRing.scaleY = 0.85;
+      this.placementRing.alpha = 0.9;
+      this.placementRing.visible = true;
+      this.placementRing.tweener.clear()
+        .to({ scaleX: 1.05, scaleY: 1.05 }, this.placePressThreshold, "linear");
+
+      var press = {
+        x: hit.x, y: hit.y, startX: px, startY: py,
+        originalValue: G.EMPTY, existingStone: false,
+        becameBlack: false, canceled: false, timer: null,
+      };
+      this.placePress = press;
+      press.timer = setTimeout(() => {
+        if (this.placePress !== press || press.canceled) return;
+        press.becameBlack = true;
+        this.board.set(press.x, press.y, G.BLACK);
+        var sprite = this.stoneSprites[press.y][press.x];
+        if (sprite) {
+          sprite.fill = "#151719";
+          sprite.stroke = "#000";
+          sprite.strokeWidth = 2;
+          sprite.visible = true;
+        }
+        this.displayedCells[press.y * S + press.x] = G.BLACK;
+        this.placementRing.stroke = "#151719";
+        this.placementRing.strokeWidth = 7;
+        this.placementRing.tweener.clear();
+        this.placementRing.scaleX = 1.18;
+        this.placementRing.scaleY = 1.18;
+        this.placementRing.tweener.to({ scaleX: 1, scaleY: 1 }, 100, "easeOutQuad");
+        setTimeout(() => SoundManager.play("blackSound"), 0);
+      }, this.placePressThreshold);
+    },
+    movePlacementPress: function (px, py) {
+      var press = this.placePress;
+      if (!press || press.canceled) return;
+      if (Math.hypot(px - press.startX, py - press.startY) <= this.placePressCancelDistance) return;
+      press.canceled = true;
+      if (press.timer) { clearTimeout(press.timer); press.timer = null; }
+      this.placementRing.tweener.clear();
+      this.placementRing.visible = false;
+      // 指を大きくずらした場合は、空点なら仮石を元へ戻してキャンセル。
+      if (!press.existingStone) {
+        this.board.set(press.x, press.y, G.EMPTY);
+        this.invalidateStoneDisplay();
+        this.render();
+      }
+    },
+    endPlacementPress: function (px, py) {
+      var press = this.placePress;
+      if (!press) return;
+      this.placePress = null;
+      if (press.timer) clearTimeout(press.timer);
+      this.placementRing.tweener.clear();
+      this.placementRing.visible = false;
+      if (press.canceled) return;
+
+      if (press.existingStone) {
+        // 既存石は短いクリック/タップで削除。ドラッグならmove側でキャンセル済み。
+        this.board.set(press.x, press.y, G.EMPTY);
+      } else if (!press.becameBlack) {
+        // 350ms未満なら白で確定。
+        this.board.set(press.x, press.y, G.WHITE);
+      }
+      this.frames = [];
+      this.clearHints();
+      this.invalidateStoneDisplay();
       this.render();
     },
     normal: function () {
@@ -1219,7 +1421,7 @@ phina.globalize();
       this.clearHints();
       this.last = null;
       this.msg.text =
-        "空いてるところをタップすると\n白 → 黒 → 空 で変わるよ";
+        "タップで白、長押しで黒だよ";
       this.render();
       this.updateButtons();
     },
