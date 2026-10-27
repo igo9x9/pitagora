@@ -314,13 +314,16 @@ phina.globalize();
         SoundManager.play('failSound');
       }
       if (this.goalReached && !wasGoalReached) {
-        SoundManager.play('goalSound');
         // ゴールへ入った瞬間は、旗なしの盤面を描いてから旗を立てる。
         this.piAnimating = true;
         this.render();
         this.showPiFlag(true);
         this.showGoalCelebration();
         this.piAnimating = false;
+        // 音は次のイベントループへ
+        setTimeout(() => {
+          SoundManager.play("goalSound");
+        }, 0);
       } else {
         this.render();
       }
@@ -726,7 +729,6 @@ phina.globalize();
       sprite.strokeWidth = 2;
 
       if (value === G.BLACK) {
-        SoundManager.play('blackSound');
         // 黒はその場を押さえる。位置は動かさない。
         sprite.scaleX = 1.25;
         sprite.scaleY = 1.25;
@@ -735,8 +737,10 @@ phina.globalize();
           .call(() => {
             if (this.moveEffectKey === key) this.moveEffectKey = "";
           });
+        setTimeout(() => {
+          SoundManager.play("blackSound");
+        }, 0);
       } else if (value === G.WHITE) {
-        SoundManager.play('whiteSound');
         // 白は前の白石から現在の交点へ逃げ込む方向を見せる。
         // 本来の交点より進行方向の逆側から、6pxだけ滑り込ませる。
         var from = previousWhiteMove || { x: TARGET.x, y: TARGET.y };
@@ -772,6 +776,9 @@ phina.globalize();
             sprite.y = destination.y;
             if (this.moveEffectKey === key) this.moveEffectKey = "";
           });
+        setTimeout(() => {
+          SoundManager.play("whiteSound");
+        }, 0);
       }
     },
     updateStoneSprites: function () {
