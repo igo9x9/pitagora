@@ -57,7 +57,7 @@ phina.globalize();
     superClass: "DisplayScene",
     init: function () {
       this.superInit({ width: W, height: H });
-      this.backgroundColor = "#00B050";
+      this.backgroundColor = "#159447";
 
       // タイトル画像
       var titleLogo = Sprite("titleLogo")
@@ -87,7 +87,7 @@ phina.globalize();
     superClass: "DisplayScene",
     init: function () {
       this.superInit({ width: W, height: H });
-      this.backgroundColor = "#00B050";
+      this.backgroundColor = "#159447";
       this.board = newBoard();
       this.target = { x: TARGET.x, y: TARGET.y };
       this.turn = "white";
@@ -115,6 +115,7 @@ phina.globalize();
       this.stoneSprites = [];
       this.displayedCells = Array(S * S).fill(-1);
       this.displayedLastKey = "";
+      this.moveEffectKey = "";
       this.storageKey = "pitagora-shicho-board-v1";
       this.workMenuOpen = false;
       this.workMenuObjects = [];
@@ -134,12 +135,12 @@ phina.globalize();
       this.startButton = btn(this, 115, BY, 180, "スタート", "#ef6c00", () => this.primaryAction());
       this.resetButton = btn(this, 310, BY, 160, "手直し", "#1976d2", () => this.editAgain());
       this.replayButton = btn(this, 485, BY, 150, "全消去", "#607d8b", () => this.reset());
-      this.workButton = btn(this, 655, BY, 70, "⋮", "#455a64", () => this.toggleWorkMenu());
+      this.workButton = btn(this, 655, BY, 70, "⋮", "#4A4A44", () => this.toggleWorkMenu());
       if (this.workButton.buttonLabel) this.workButton.buttonLabel.fontSize = 34;
-      this.prevReplayButton = btn(this, 255, BY + 92, 84, "◀", "#455a64", () =>
+      this.prevReplayButton = btn(this, 255, BY + 92, 84, "◀", "#4A4A44", () =>
         this.stepReplay(-1),
       );
-      this.nextReplayButton = btn(this, 465, BY + 92, 84, "▶", "#455a64", () =>
+      this.nextReplayButton = btn(this, 465, BY + 92, 84, "▶", "#4A4A44", () =>
         this.stepReplay(1),
       );
       this.replayCounter = Label({
@@ -301,12 +302,12 @@ phina.globalize();
       var prevEnabled = this.replayNavVisible && current > 1;
       var nextEnabled = this.replayNavVisible && current < total;
       if (this.prevReplayButton) {
-        this.prevReplayButton.fill = prevEnabled ? "#455a64" : "#777777";
+        this.prevReplayButton.fill = prevEnabled ? "#4A4A44" : "#777777";
         this.prevReplayButton.alpha = prevEnabled ? 1 : 0.45;
         this.prevReplayButton.setInteractive(prevEnabled);
       }
       if (this.nextReplayButton) {
-        this.nextReplayButton.fill = nextEnabled ? "#455a64" : "#777777";
+        this.nextReplayButton.fill = nextEnabled ? "#4A4A44" : "#777777";
         this.nextReplayButton.alpha = nextEnabled ? 1 : 0.45;
         this.nextReplayButton.setInteractive(nextEnabled);
       }
@@ -339,6 +340,7 @@ phina.globalize();
         this.setCat(this.catFrame === 1 ? "neko1" : "neko2");
       }
       if (this.goalReached && !wasGoalReached) {
+        SoundManager.play('goalSound');
         // ゴールへ入った瞬間は、旗なしの盤面を描いてから旗を立てる。
         this.piAnimating = true;
         this.render();
@@ -347,6 +349,32 @@ phina.globalize();
         this.piAnimating = false;
       } else {
         this.render();
+      }
+      // 自動再生中、新しく石が置かれたフレームだけ着手エフェクト
+      if (!this.replayPaused && f.last) {
+          var li = f.last.y * S + f.last.x;
+
+          var prevValue =
+              index > 0
+                  ? this.frames[index - 1].cells[li]
+                  : G.EMPTY;
+
+          var nowValue = f.cells[li];
+
+          if (
+              prevValue === G.EMPTY &&
+              (nowValue === G.BLACK || nowValue === G.WHITE)
+          ) {
+              var previousWhiteMove =
+                  nowValue === G.WHITE
+                      ? this.findPreviousWhiteMove(index)
+                      : null;
+              this.playStoneMoveEffect(
+                  f.last.x,
+                  f.last.y,
+                  previousWhiteMove
+              );
+          }
       }
       this.updateReplayCounter();
     },
@@ -497,7 +525,7 @@ phina.globalize();
       var shade = RectangleShape({
         width: W,
         height: H - uiTop,
-        fill: "#00B050",
+        fill: "#159447",
         stroke: "transparent",
       })
         .setPosition(W / 2, (uiTop + H) / 2)
@@ -648,7 +676,7 @@ phina.globalize();
       RectangleShape({
         width: BP + 56,
         height: BP + 56,
-        fill: "#d9ad5f",
+        fill: "#E1B866",
         stroke: "#8b5d27",
         strokeWidth: 5,
       })
@@ -699,10 +727,98 @@ phina.globalize();
           this.stoneSprites[y][x] = stone;
         }
       }
+      this.lastMoveMarker = CircleShape({
+          radius: 10,
+          fill: "#fff",
+          stroke: null,
+      }).addChildTo(this);
+      this.lastMoveMarker.visible = false;
     },
     invalidateStoneDisplay: function () {
       this.displayedCells = Array(S * S).fill(-1);
       this.displayedLastKey = "";
+    },
+    findPreviousWhiteMove: function (frameIndex) {
+      // 現在より前のフレームから、実際に新しく置かれた白石を探す。
+      for (var i = frameIndex - 1; i >= 0; i--) {
+        var frame = this.frames[i];
+        if (!frame || !frame.last) continue;
+        var x = frame.last.x;
+        var y = frame.last.y;
+        var cellIndex = y * S + x;
+        if (frame.cells[cellIndex] !== G.WHITE) continue;
+        var before = i > 0 ? this.frames[i - 1].cells[cellIndex] : G.EMPTY;
+        if (before === G.EMPTY) return { x: x, y: y };
+      }
+      // 最初に逃げる白石は、シチョウ開始地点から動いたものとして扱う。
+      return { x: TARGET.x, y: TARGET.y };
+    },
+    playStoneMoveEffect: function (x, y, previousWhiteMove) {
+      var sprite = this.stoneSprites[y] && this.stoneSprites[y][x];
+      if (!sprite || !sprite.visible) return;
+
+      var key = x + "," + y;
+      var value = this.board.get(x, y);
+      var destination = pos(x, y);
+      this.moveEffectKey = key;
+
+      sprite.tweener.clear();
+      // 前回のアニメーションが途中で中断されても、必ず交点を基準に戻す。
+      sprite.x = destination.x;
+      sprite.y = destination.y;
+      sprite.scaleX = 1;
+      sprite.scaleY = 1;
+      sprite.stroke = value === G.BLACK ? "#000" : "#aaa";
+      sprite.strokeWidth = 2;
+
+      if (value === G.BLACK) {
+        SoundManager.play('blackSound');
+        // 黒はその場を押さえる。位置は動かさない。
+        sprite.scaleX = 1.25;
+        sprite.scaleY = 1.25;
+        sprite.tweener
+          .to({ scaleX: 1, scaleY: 1 }, 100, "easeOutQuad")
+          .call(() => {
+            if (this.moveEffectKey === key) this.moveEffectKey = "";
+          });
+      } else if (value === G.WHITE) {
+        SoundManager.play('whiteSound');
+        // 白は前の白石から現在の交点へ逃げ込む方向を見せる。
+        // 本来の交点より進行方向の逆側から、6pxだけ滑り込ませる。
+        var from = previousWhiteMove || { x: TARGET.x, y: TARGET.y };
+        var dx = x - from.x;
+        var dy = y - from.y;
+        var length = Math.hypot(dx, dy);
+        var distance = 16;
+        if (length > 0) {
+          sprite.x = destination.x - (dx / length) * distance;
+          sprite.y = destination.y - (dy / length) * distance;
+        }
+        // 位置移動を見せることを優先し、100ms全体を使って交点へ滑り込ませる。
+        // 前版は6pxを40msで移動していたため、ほぼ知覚できなかった。
+        sprite.scaleX = 0.95;
+        sprite.scaleY = 0.95;
+        sprite.tweener
+          // ずらした初期位置を、少なくとも1回は画面に描画させる
+          .wait(10)
+          .to(
+            {
+              x: destination.x,
+              y: destination.y,
+              scaleX: 1.12,
+              scaleY: 1.12,
+            },
+            90,
+            "easeOutQuad"
+          )
+          .to({ scaleX: 1, scaleY: 1 }, 10, "easeOutQuad")
+          .call(() => {
+            // 次のフレームが始まる前に、必ず交点へ固定する。
+            sprite.x = destination.x;
+            sprite.y = destination.y;
+            if (this.moveEffectKey === key) this.moveEffectKey = "";
+          });
+      }
     },
     updateStoneSprites: function () {
       var oldLast = this.displayedLastKey;
@@ -730,14 +846,36 @@ phina.globalize();
           }
 
           if (isStone && (changed || key === oldLast || key === newLast)) {
-            var hi = key === newLast;
-            sprite.stroke = hi
-              ? "#ff5252"
-              : value === G.BLACK ? "#000" : "#aaa";
-            sprite.strokeWidth = hi ? 5 : 2;
+            sprite.stroke = value === G.BLACK ? "#000" : "#aaa";
+            sprite.strokeWidth = 2;
           }
         }
       }
+      if (this.last) {
+        var lastValue = this.board.get(this.last.x, this.last.y);
+        var lastSprite =
+          this.stoneSprites[this.last.y][this.last.x];
+
+        if (
+          lastSprite &&
+          lastSprite.visible &&
+          (lastValue === G.BLACK || lastValue === G.WHITE)
+        ) {
+          this.lastMoveMarker.x = lastSprite.x;
+          this.lastMoveMarker.y = lastSprite.y;
+
+          // 黒石には白点、白石には黒点
+          this.lastMoveMarker.fill =
+              lastValue === G.BLACK ? "#fff" : "#000";
+
+          this.lastMoveMarker.visible = true;
+        } else {
+          this.lastMoveMarker.visible = false;
+        }
+      } else {
+        this.lastMoveMarker.visible = false;
+      }
+
       this.displayedLastKey = newLast;
     },
     clear: function () {
@@ -1146,6 +1284,11 @@ phina.globalize();
           neko3: "neko3.png",
           neko4: "neko4.png",
           pi: "pi.png",
+        },
+        sound: {
+          blackSound: "black.mp3",
+          whiteSound: "white.mp3",
+          goalSound: "goal.mp3"
         },
       },
     }).run();
