@@ -134,7 +134,7 @@ phina.globalize();
       this.tweener.clear().wait(110).call(() => this.exit("main"));
     });
       Label({
-        text: "シチョウで、白石をゴールにみちびこう！",
+        text: "シチョウでゴールを目指そう！",
         fontSize: 28,
         fill: "#fff",
         lineHeight: 1.5,
@@ -310,10 +310,10 @@ phina.globalize();
     copyShareUrl: function () {
       var url = this.createShareUrl();
       if (!url) return;
-      var done = () => { this.msg.text = "共有リンクをコピーしたよ"; };
+      var done = () => { this.msg.text = "共有リンクをコピーしました"; };
       var failed = (e) => {
         console.error("共有リンクのコピーに失敗", e);
-        this.msg.text = "リンクをコピーできなかった…";
+        this.msg.text = "リンクをコピーできません…";
       };
       if (navigator.clipboard && navigator.clipboard.writeText) {
         navigator.clipboard.writeText(url).then(done).catch(() => this.copyTextFallback(url, done, failed));
@@ -348,17 +348,17 @@ phina.globalize();
       if (!this.canStart || this.running || this.replaying) return;
       try {
         localStorage.setItem(this.storageKey, JSON.stringify(this.serializeBoardForStorage()));
-        this.msg.text = "この配置を保存したよ";
+        this.msg.text = "この配置を保存しました";
       } catch (e) {
         console.error("盤面の保存に失敗", e);
-        this.msg.text = "保存できなかった…";
+        this.msg.text = "保存できませんでした";
       }
     },
     loadBoardFromLocalStorage: function () {
       try {
         var raw = localStorage.getItem(this.storageKey);
         if (!raw) {
-          this.msg.text = "保存した配置がないよ";
+          this.msg.text = "保存した配置がありません";
           return;
         }
         var data = JSON.parse(raw);
@@ -390,12 +390,12 @@ phina.globalize();
         this.setReplayNavVisible(false);
         this.clearHints();
         this.last = null;
-          this.msg.text = "保存した配置を読み込んだよ";
+          this.msg.text = "保存した配置を読み込みました";
         this.render();
         this.updateButtons();
       } catch (e) {
         console.error("盤面の読込に失敗", e);
-        this.msg.text = "読み込めなかった…";
+        this.msg.text = "読み込めませんでした";
       }
     },
     setReplayNavVisible: function (visible) {
@@ -595,19 +595,28 @@ phina.globalize();
       if (this.tutorialStep === 1) {
         var startP = pos(TARGET.x, TARGET.y);
         this.addSpotlightCurtains(startP.x - C * 0.45, startP.y, C * 4, C * 3.2);
-        text = "ここからシチョウが始まって\n白が逃げ出します";
+        text = "ここから白が逃げ出します\n黒はシチョウで追いかけます";
+        var arrow = Sprite("arrow")
+          .setPosition(W / 2 - 240, 650)
+          .addChildTo(this);
+        this.addTutorial(arrow);
       } else if (this.tutorialStep === 2) {
         var goalP = pos(GOAL.x, GOAL.y);
         this.addSpotlightCurtains(goalP.x, goalP.y, C * 2.2, C * 2.2);
         text = "白がここまで来たらゴールです";
+        var arrow = Sprite("arrow")
+          .setPosition(W / 2 + 190, 630)
+          .addChildTo(this);
+        arrow.scaleX *= -1;
+        this.addTutorial(arrow);
       } else {
         // 最後は盤面全体を見せ、濃色パネルで文章の視認性を確保する。
         var panel = RectangleShape({
-          width: 590, height: 250, cornerRadius: 22,
+          width: 590, height: 330, cornerRadius: 22,
           fill: "rgba(0,0,0,0.62)", stroke: "transparent",
         }).setPosition(W / 2, 520).addChildTo(this);
         this.addTutorial(panel);
-        text = "好きな場所に石を置いて\n白石をゴールへみちびこう！\n\nこのゲームの特別ルールとして\n黒石は取られたらいけません";
+        text = "自由に石を置いて\n白石をゴールへみちびこう！\n\nなお、このゲームでは\n黒石が取られたらそこで終わり、\nというルールにしています";
         textY = 520;
       }
       this.addTutorial(Label({
@@ -628,11 +637,11 @@ phina.globalize();
       }
       // 説明を消し、中央の盤面を通常位置へスッと戻してから操作を解放する。
       this.clearTutorial();
-      this.boardLayer.tweener.clear().to({ y: 0 }, 350, "easeOutQuad").call(() => {
+      this.boardLayer.tweener.clear().to({ y: 0 }, 350, "easeInBack").call(() => {
         this.tutorialActive = false;
         this.setMainButtonsVisible(true);
         this.setReplayNavVisible(false);
-        this.msg.text = "黒からのアタリが続くように石を置こう！\nタップで白、長押しで黒だよ";
+        this.msg.text = "自由に石を置こう！\nタップで白、長押しで黒だよ";
         this.updateButtons();
       });
     },
@@ -744,8 +753,8 @@ phina.globalize();
         width: BP + 56,
         height: BP + 56,
         fill: "#E1B866",
-        stroke: "#8b5d27",
-        strokeWidth: 5,
+        stroke: "#000",
+        strokeWidth: 10,
       })
         .setPosition(W / 2, T + BP / 2)
         .addChildTo(this.base);
@@ -780,7 +789,7 @@ phina.globalize();
     },
     createBoardSprites: function () {
       var gp = pos(GOAL.x, GOAL.y);
-      this.goalCircle = CircleShape({ radius:23, fill:"#ffd600", stroke:"#fff", strokeWidth:5 })
+      this.goalCircle = CircleShape({ radius:23, fill:"#ffff00", stroke:"#000", strokeWidth:8 })
         .setPosition(gp.x, gp.y).addChildTo(this.boardLayer);
       this.goalLabel = Label({ text:"Ｇ", fontSize:24, fill:"#000", fontWeight:"bold" })
         .setPosition(gp.x, gp.y).addChildTo(this.boardLayer);
@@ -1272,30 +1281,30 @@ phina.globalize();
             if (explanation) {
               this.board = explanation.board; this.last = explanation.move; this.branchMarkers = explanation.liberties;
               this.recordRunMove(G.BLACK, explanation.move);
-              resultText = "白の逃げ道が" + explanation.liberties.length + "つある！";
+              resultText = "白の逃げ道が" + explanation.liberties.length + "つある！\n残念…";
               this.save(resultText);
             } else {
               var group = this.board.groupAt(this.target.x, this.target.y);
               this.branchMarkers = this.board.playableLiberties(group);
-              resultText = "白の逃げ道が" + this.branchMarkers.length + "つある！";
+              resultText = "白の逃げ道が" + this.branchMarkers.length + "つある！\n残念…";
               this.save(resultText);
             }
             break;
           }
           if (r.status === "white-branch") {
             this.clearHints(); this.branchMarkers = r.liberties || [];
-            resultText = "白の逃げ道が" + r.count + "つある！";
+            resultText = "白の逃げ道が" + r.count + "つある！\n残念…";
             this.save(resultText);
             break;
           }
           if (r.status === "white-can-capture") {
             this.collectCaptureHints(r);
-            resultText = "白が黒石を取れちゃう！";
+            resultText = "黒石が取られてしまう！\n残念…";
             this.save(resultText);
             break;
           }
           if (r.status !== "ok") {
-            resultText = ({ obstacle:"シチョウが続かない！", "no-escape":"白はもう逃げられない！", captured:"白はもう逃げられない！", illegal:"白はそこに打てない！" })[r.status] || "白が止まった！";
+            resultText = ({ obstacle:"シチョウが続かない！\n残念…", "no-escape":"白はもう逃げられない！\n残念…", captured:"白はもう逃げられない！\n残念…", illegal:"白はそこに打てない！\n残念…" })[r.status] || "白が止まった！\n残念…";
             this.save(resultText);
             break;
           }
@@ -1304,7 +1313,7 @@ phina.globalize();
           this.clearHints(); this.save("白が逃げる");
         } else {
           r = engine.chooseBlack();
-          if (r.status !== "ok") { resultText = "黒はアタリを続けられない！"; this.save(resultText); break; }
+          if (r.status !== "ok") { resultText = "黒はアタリを続けられない！\n残念…"; this.save(resultText); break; }
           this.board = r.board; this.target = r.target; this.turn = "white"; this.last = r.move; this.moveCount++;
           this.recordRunMove(G.BLACK, r.move);
           this.clearHints(); this.save("黒が追う");
@@ -1458,7 +1467,7 @@ phina.globalize();
       this.clearHints();
       this.last = null;
       this.msg.text =
-        "黒からのアタリが続くように石を置こう！\nタップで白、長押しで黒だよ";
+        "自由に石を置こう！\nタップで白、長押しで黒だよ";
       this.render();
       this.updateButtons();
     },
@@ -1473,6 +1482,7 @@ phina.globalize();
         image: {
           titleLogo: "title.png",
           pi: "pi.png",
+          arrow: "arrow.png",
         },
         sound: {
           blackSound: "black.mp3",
