@@ -47,7 +47,21 @@ phina.globalize();
       fontWeight: "bold",
     }).addChildTo(r);
     r.buttonLabel = buttonLabel;
-    r.onpointstart = fn;
+    r.buttonBaseY = y;
+
+    // 押した瞬間に少し縮み、3px沈むことで明確な押下感を返す。
+    // WorkMenuSceneはonpointendを独自利用するため、復帰は自動Tweenerで完結させる。
+    r.onpointstart = function () {
+      if (r.alpha < 0.5) return;
+      r.tweener.clear();
+      r.scaleX = 0.94;
+      r.scaleY = 0.94;
+      r.y = r.buttonBaseY + 3;
+      r.tweener
+        .wait(45)
+        .to({ scaleX: 1, scaleY: 1, y: r.buttonBaseY }, 90, "easeOutQuad");
+      if (fn) fn();
+    };
     return r;
   }
   function clonePoints(a) {
@@ -115,7 +129,10 @@ phina.globalize();
       var scale = targetWidth / titleLogo.width;
       titleLogo.setScale(scale);
 
-      btn(this, W / 2, 755, 330, "あそぶ", "#ef6c00", () => this.exit("main"));
+      btn(this, W / 2, 755, 330, "あそぶ", "#ef6c00", () => {
+      // 押下状態を先に1フレーム以上見せてからMainSceneを生成する。
+      this.tweener.clear().wait(110).call(() => this.exit("main"));
+    });
       Label({
         text: "シチョウで、白石をゴールにみちびこう！",
         fontSize: 28,
@@ -135,7 +152,7 @@ phina.globalize();
       RectangleShape({
         width: 350, height: 450, cornerRadius: 18,
         fill: "rgba(20,35,45,0.96)", stroke: "#fff", strokeWidth: 4,
-      }).setPosition(W / 2, 775).addChildTo(this);
+      }).setPosition(W / 2, 575).addChildTo(this);
       var menuButton = (y, text, color, action) => {
         var button = btn(this, W / 2, y, 280, text, color, () => {});
         button.onpointend = () => {
@@ -143,11 +160,11 @@ phina.globalize();
           setTimeout(() => this.app.popScene(), 0);
         };
       };
-      menuButton(620, "この配置を保存", "#ef6c00", options.onSave);
-      menuButton(700, "保存した配置を読込", "#1976d2", options.onLoad);
-      menuButton(780, "共有リンクをコピー", "#4A4A44", options.onShare);
-      menuButton(860, "タイトルへ戻る", "#795548", options.onTitle);
-      menuButton(940, "閉じる", "#607d8b", null);
+      menuButton(420, "この配置を保存", "#ef6c00", options.onSave);
+      menuButton(500, "保存した配置を読込", "#1976d2", options.onLoad);
+      menuButton(580, "共有リンクをコピー", "#4A4A44", options.onShare);
+      menuButton(660, "タイトルへ戻る", "#795548", options.onTitle);
+      menuButton(740, "閉じる", "#607d8b", null);
     },
   });
   phina.define("MainScene", {
@@ -613,7 +630,7 @@ phina.globalize();
         this.tutorialActive = false;
         this.setMainButtonsVisible(true);
         this.setReplayNavVisible(false);
-        this.msg.text = "タップして白、長押しで黒だよ";
+        this.msg.text = "黒からのアタリが続くように石を置こう！\nタップで白、長押しで黒だよ";
         this.updateButtons();
       });
     },
@@ -1427,7 +1444,7 @@ phina.globalize();
       this.clearHints();
       this.last = null;
       this.msg.text =
-        "タップで白、長押しで黒だよ";
+        "黒からのアタリが続くように石を置こう！\nタップで白、長押しで黒だよ";
       this.render();
       this.updateButtons();
     },
