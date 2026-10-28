@@ -185,6 +185,7 @@ phina.globalize();
       this.runMoves = [];
       this.previousRunMoves = null;
       this.compareAfterEdit = false;
+      this.beforeEditCells = null;
       this.branchMarkers = [];
       this.captureMoves = [];
       this.captureStones = [];
@@ -381,6 +382,7 @@ phina.globalize();
         this.runMoves = [];
         this.previousRunMoves = null;
         this.compareAfterEdit = false;
+      this.beforeEditCells = null;
         this.simulationResult = null;
         this.goalReached = false;
         this.piAnimating = false;
@@ -716,6 +718,7 @@ phina.globalize();
       // 再生中・一時停止中・一手送り/戻し中でも即座に編集へ戻る。
       this.tweener.clear();
       this.board = this.editBoard.clone();
+      this.beforeEditCells = this.board.cells.slice();
       this.invalidateStoneDisplay();
       this.target = { x: TARGET.x, y: TARGET.y };
       this.turn = "white";
@@ -1179,8 +1182,17 @@ phina.globalize();
       while (i < n && a[i].color === b[i].color && a[i].x === b[i].x && a[i].y === b[i].y) i++;
       return i;
     },
+    boardsAreSame: function (a, b) {
+      if (!a || !b || a.length !== b.length) return false;
+      for (var i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
+      return true;
+    },
     replayStartIndexAfterEdit: function () {
       if (!this.compareAfterEdit || !this.previousRunMoves) return 0;
+      if (this.beforeEditCells && this.editBoard && this.boardsAreSame(this.beforeEditCells, this.editBoard.cells)) {
+        console.debug("[Replay] 盤面変更なし → 最初から再生");
+        return 0;
+      }
       var common = this.commonMoveCount(this.previousRunMoves, this.runMoves);
       var index = Math.max(0, common - 6);
       console.debug("[Replay] 手直し前後の比較", { previousMoves:this.previousRunMoves.length, currentMoves:this.runMoves.length, commonMoves:common, replayStartIndex:index });
@@ -1308,6 +1320,7 @@ phina.globalize();
       this.replayCurrentIndex = replayStart - 1;
       this.previousRunMoves = this.runMoves.map((m) => ({ color:m.color, x:m.x, y:m.y }));
       this.compareAfterEdit = false;
+      this.beforeEditCells = null;
       this.updateButtons();
       this.playFrame();
     },
@@ -1436,6 +1449,7 @@ phina.globalize();
       this.runMoves = [];
       this.previousRunMoves = null;
       this.compareAfterEdit = false;
+      this.beforeEditCells = null;
       this.simulationResult = null;
       this.goalReached = false;
       this.piAnimating = false;
