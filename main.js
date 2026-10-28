@@ -133,9 +133,9 @@ phina.globalize();
       options = options || {};
       this.backgroundColor = "rgba(0,0,0,0.15)";
       RectangleShape({
-        width: 350, height: 370, cornerRadius: 18,
+        width: 350, height: 450, cornerRadius: 18,
         fill: "rgba(20,35,45,0.96)", stroke: "#fff", strokeWidth: 4,
-      }).setPosition(W / 2, 815).addChildTo(this);
+      }).setPosition(W / 2, 775).addChildTo(this);
       var menuButton = (y, text, color, action) => {
         var button = btn(this, W / 2, y, 280, text, color, () => {});
         button.onpointend = () => {
@@ -143,9 +143,10 @@ phina.globalize();
           setTimeout(() => this.app.popScene(), 0);
         };
       };
-      menuButton(700, "この配置を保存", "#ef6c00", options.onSave);
-      menuButton(780, "保存した配置を読込", "#1976d2", options.onLoad);
-      menuButton(860, "共有リンクをコピー", "#4A4A44", options.onShare);
+      menuButton(620, "この配置を保存", "#ef6c00", options.onSave);
+      menuButton(700, "保存した配置を読込", "#1976d2", options.onLoad);
+      menuButton(780, "共有リンクをコピー", "#4A4A44", options.onShare);
+      menuButton(860, "タイトルへ戻る", "#795548", options.onTitle);
       menuButton(940, "閉じる", "#607d8b", null);
     },
   });
@@ -189,7 +190,7 @@ phina.globalize();
       this.workMenuObjects = [];
       // 編集時の短押し/長押し判定用。短押し=白、350ms長押し=黒。
       this.placePress = null;
-      this.placePressThreshold = 250;
+      this.placePressThreshold = 350;
       this.placePressCancelDistance = 32;
       this.sharedBoardLoaded = false;
       if (SHARED_BOARD) {
@@ -200,9 +201,12 @@ phina.globalize();
         this.tutorialActive = false;
         this.sharedBoardLoaded = true;
       }
-      this.base = DisplayElement().addChildTo(this);
+      this.boardLayer = DisplayElement().addChildTo(this);
+      this.base = DisplayElement().addChildTo(this.boardLayer);
       this.drawBase();
       this.createBoardSprites();
+      this.tutorialBoardOffsetY = 185;
+      if (this.tutorialActive) this.boardLayer.y = this.tutorialBoardOffsetY;
       this.msg = Label({
         text: "",
         fontSize: 30,
@@ -231,6 +235,9 @@ phina.globalize();
       this.setReplayNavVisible(false);
       this.updateSpeedButtons();
       this.updateButtons();
+      // チュートリアル中は通常操作の4ボタンを完全に隠す。
+      // 共有URL起動ではtutorialActive=falseなので最初から表示する。
+      if (this.tutorialActive) this.setMainButtonsVisible(false);
       this.onpointstart = (e) => {
         if (this.tutorialActive) {
           this.nextTutorial();
@@ -258,10 +265,15 @@ phina.globalize();
         onSave: function () { mainScene.saveBoardToLocalStorage(); },
         onLoad: function () { mainScene.loadBoardFromLocalStorage(); },
         onShare: function () { mainScene.copyShareUrl(); },
+        onTitle: function () { mainScene.returnToTitle(); },
       }));
     },
     closeWorkMenu: function () {
       // 互換用：作品メニューは専用SceneなのでMainScene側では処理不要。
+    },
+    returnToTitle: function () {
+      // WorkMenuSceneがpopされた直後にMainSceneを終了し、タイトルへ戻す。
+      setTimeout(() => this.exit("title"), 30);
     },
     normalizeBoardForEditing: function (board) {
       INIT.forEach((stone) => board.set(stone.x, stone.y, stone.c));
@@ -508,7 +520,7 @@ phina.globalize();
         stroke: "transparent",
       })
         .setPosition(x, y)
-        .addChildTo(this);
+        .addChildTo(this.boardLayer);
       shade.alpha = alpha;
       this.addTutorial(shade);
     },
@@ -560,86 +572,33 @@ phina.globalize();
     showTutorialStep: function () {
       this.clearTutorial();
       if (!this.tutorialActive) return;
-      var text = "",
-        textX = W / 2,
-        textY = T + BP / 2,
-        hole = null;
+      var text = "", textX = W / 2, textY = 510;
       if (this.tutorialStep === 1) {
         var startP = pos(TARGET.x, TARGET.y);
-        hole = this.addSpotlightCurtains(
-          startP.x - C * 0.45,
-          startP.y,
-          C * 3.25,
-          C * 3.2,
-        );
-        text = "ここからシチョウが始まって、\n白が逃げます";
+        this.addSpotlightCurtains(startP.x - C * 0.45, startP.y, C * 4, C * 3.2);
+        text = "ここからシチョウが始まって\n白が逃げ出します";
       } else if (this.tutorialStep === 2) {
         var goalP = pos(GOAL.x, GOAL.y);
-        hole = this.addSpotlightCurtains(goalP.x, goalP.y, C * 2.2, C * 2.2);
-        text = "白が「Ｇ」まで来たらゴールです";
+        this.addSpotlightCurtains(goalP.x, goalP.y, C * 2.2, C * 2.2);
+        text = "白がここまで来たらゴールです";
       } else {
-        text = "好きな場所に石を置いて、\n白石をゴールへみちびこう！\n\nこのゲームの特別ルールとして、\n途中で黒石が取られたらダメです";
+        // 最後は盤面全体を見せ、濃色パネルで文章の視認性を確保する。
+        var panel = RectangleShape({
+          width: 590, height: 250, cornerRadius: 22,
+          fill: "rgba(0,0,0,0.62)", stroke: "transparent",
+        }).setPosition(W / 2, 520).addChildTo(this);
+        this.addTutorial(panel);
+        text = "好きな場所に石を置いて\n白石をゴールへみちびこう！\n\nこのゲームの特別ルールとして\n黒石は取られたらいけません";
+        textY = 520;
       }
-      if (hole) {
-        var frame =
-          this.tutorialStep === 1
-            ? RectangleShape({
-                width: hole.width,
-                height: hole.height,
-                cornerRadius: 34,
-                fill: "transparent",
-                stroke: "#ffd54f",
-                strokeWidth: 5,
-              })
-            : CircleShape({
-                radius: Math.min(hole.width, hole.height) / 2,
-                fill: "transparent",
-                stroke: "#ffd54f",
-                strokeWidth: 5,
-              });
-        this.addTutorial(
-          frame.setPosition(hole.centerX, hole.centerY).addChildTo(this),
-        );
-      }
-      var uiTop = T + BP + 28;
-      // this.addTutorialShade(W / 2, (uiTop + H) / 2, W, H - uiTop, 0.76);
-      var shade = RectangleShape({
-        width: W,
-        height: H - uiTop,
-        fill: "#159447",
-        stroke: "transparent",
-      })
-        .setPosition(W / 2, (uiTop + H) / 2)
-        .addChildTo(this);
-      shade.alpha = 1;
-      this.addTutorial(shade);
-      this.addTutorial(
-        Label({
-          text: text,
-          fontSize: 34,
-          fill: "#fff",
-          fontWeight: "bold",
-          lineHeight: 1.35,
-          stroke: "rgba(0,0,0,0.68)",
-          strokeWidth: 6,
-          align: "center",
-        })
-          .setPosition(textX, textY)
-          .addChildTo(this),
-      );
-      this.addTutorial(
-        Label({
-          text:
-            this.tutorialStep < 3
-              ? "タップして次へ"
-              : "タップしてはじめよう！",
-          fontSize: 22,
-          fill: "rgba(255,255,255,1)",
-          fontWeight: "bold",
-        })
-          .setPosition(W / 2, H - 450)
-          .addChildTo(this),
-      );
+      this.addTutorial(Label({
+        text: text, fontSize: 34, fill: "#fff", fontWeight: "bold",
+        lineHeight: 1.35, stroke: "rgba(0,0,0,0.68)", strokeWidth: 6, align: "center",
+      }).setPosition(textX, textY).addChildTo(this));
+      // this.addTutorial(Label({
+      //   text: this.tutorialStep < 3 ? "タップして次へ" : "タップしてはじめよう！",
+      //   fontSize: 22, fill: "#fff", fontWeight: "bold",
+      // }).setPosition(W / 2, 1040).addChildTo(this));
     },
     nextTutorial: function () {
       if (!this.tutorialActive) return;
@@ -648,11 +607,20 @@ phina.globalize();
         this.showTutorialStep();
         return;
       }
-      this.tutorialActive = false;
+      // 説明を消し、中央の盤面を通常位置へスッと戻してから操作を解放する。
       this.clearTutorial();
-      this.msg.text =
-        "タップして白、長押しで黒だよ";
-      this.updateButtons();
+      this.boardLayer.tweener.clear().to({ y: 0 }, 350, "easeOutQuad").call(() => {
+        this.tutorialActive = false;
+        this.setMainButtonsVisible(true);
+        this.setReplayNavVisible(false);
+        this.msg.text = "タップして白、長押しで黒だよ";
+        this.updateButtons();
+      });
+    },
+    setMainButtonsVisible: function (visible) {
+      [this.startButton, this.resetButton, this.replayButton, this.workButton].forEach((button) => {
+        if (button) button.visible = visible;
+      });
     },
     updateButtons: function () {
       if (!this.startButton || !this.resetButton || !this.replayButton) return;
@@ -793,15 +761,15 @@ phina.globalize();
     createBoardSprites: function () {
       var gp = pos(GOAL.x, GOAL.y);
       this.goalCircle = CircleShape({ radius:23, fill:"#ffd600", stroke:"#fff", strokeWidth:5 })
-        .setPosition(gp.x, gp.y).addChildTo(this);
+        .setPosition(gp.x, gp.y).addChildTo(this.boardLayer);
       this.goalLabel = Label({ text:"Ｇ", fontSize:24, fill:"#000", fontWeight:"bold" })
-        .setPosition(gp.x, gp.y).addChildTo(this);
+        .setPosition(gp.x, gp.y).addChildTo(this.boardLayer);
       for (var y=0; y<S; y++) {
         this.stoneSprites[y] = [];
         for (var x=0; x<S; x++) {
           var p = pos(x,y);
           var stone = CircleShape({ radius:22, fill:"#151719", stroke:"#000", strokeWidth:2 })
-            .setPosition(p.x,p.y).addChildTo(this);
+            .setPosition(p.x,p.y).addChildTo(this.boardLayer);
           stone.visible = false;
           this.stoneSprites[y][x] = stone;
         }
@@ -810,7 +778,7 @@ phina.globalize();
           radius: 10,
           fill: "#fff",
           stroke: null,
-      }).addChildTo(this);
+      }).addChildTo(this.boardLayer);
       this.lastMoveMarker.visible = false;
       // 長押し中の着手点を指の外側から確認できる大きなリング。
       this.placementRing = CircleShape({
@@ -818,7 +786,7 @@ phina.globalize();
         fill: "transparent",
         stroke: "#ffffff",
         strokeWidth: 5,
-      }).addChildTo(this);
+      }).addChildTo(this.boardLayer);
       this.placementRing.visible = false;
       this.placementRing.alpha = 0.9;
     },
@@ -991,7 +959,7 @@ phina.globalize();
             strokeWidth: 6,
           })
             .setPosition(p.x, p.y)
-            .addChildTo(this),
+            .addChildTo(this.boardLayer),
         );
         this.add(
           Label({
@@ -1001,7 +969,7 @@ phina.globalize();
             fontWeight: "bold",
           })
             .setPosition(p.x, p.y)
-            .addChildTo(this),
+            .addChildTo(this.boardLayer),
         );
       }
       for (var s of this.captureStones) {
@@ -1014,7 +982,7 @@ phina.globalize();
             strokeWidth: 6,
           })
             .setPosition(p.x, p.y)
-            .addChildTo(this),
+            .addChildTo(this.boardLayer),
         );
       }
       for (var cm of this.captureMoves) {
@@ -1027,7 +995,7 @@ phina.globalize();
             strokeWidth: 6,
           })
             .setPosition(p.x, p.y)
-            .addChildTo(this),
+            .addChildTo(this.boardLayer),
         );
         this.add(
           Label({
@@ -1037,7 +1005,7 @@ phina.globalize();
             fontWeight: "bold",
           })
             .setPosition(p.x, p.y)
-            .addChildTo(this),
+            .addChildTo(this.boardLayer),
         );
       }
 
@@ -1097,6 +1065,7 @@ phina.globalize();
       this.placementRing.visible = true;
       this.placementRing.tweener.clear()
         .to({ scaleX: 1.05, scaleY: 1.05 }, this.placePressThreshold, "linear");
+      setTimeout(() => SoundManager.play("blackSound"), 0);
 
       var press = {
         x: hit.x, y: hit.y, startX: px, startY: py,
@@ -1333,7 +1302,7 @@ phina.globalize();
         // 左下を白石中央に合わせ、回転支点にもする。
         .setOrigin(0, 1)
         .setPosition(gp.x, gp.y)
-        .addChildTo(this);
+        .addChildTo(this.boardLayer);
 
       flag.width = 48;
       flag.height = 48;
@@ -1364,7 +1333,7 @@ phina.globalize();
           radius: 5,
           fill: colors[i % colors.length],
           stroke: "transparent",
-        }).setPosition(center.x, center.y).addChildTo(this);
+        }).setPosition(center.x, center.y).addChildTo(this.boardLayer);
         this.add(particle);
 
         particle.tweener.clear()
@@ -1386,7 +1355,7 @@ phina.globalize();
         fill: "transparent",
         stroke: "#ffd600",
         strokeWidth: 6,
-      }).setPosition(center.x, center.y).addChildTo(this);
+      }).setPosition(center.x, center.y).addChildTo(this.boardLayer);
       this.add(ring);
       ring.tweener.clear()
         .to({ scaleX: 2.2, scaleY: 2.2, alpha: 0 }, 800, "easeOutQuad")
