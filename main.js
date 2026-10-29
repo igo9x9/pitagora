@@ -11,8 +11,14 @@ phina.globalize();
     C = BP / (S - 1),
     MY = 740,
     BY = 850;
-  var TARGET = { x: 1, y: 11 },
-    GOAL = { x: 10, y: 10 };
+  var TARGET = { x: 1, y: 11 };
+  var STAGES = [
+    { id: 1, name: "ステージ 1", goals: [{ x: 9, y: 9 }] },
+    { id: 2, name: "ステージ 2", goals: [{ x: 9, y: 9 }, { x: 9, y: 3 }] },
+    { id: 3, name: "ステージ 3", goals: [{ x: 9, y: 9 }, { x: 9, y: 3 }, { x: 3, y: 3 }] },
+    { id: 4, name: "ステージ 4", goals: [{ x: 9, y: 9 }, { x: 9, y: 3 }, { x: 3, y: 3 }, { x: 6, y: 6 }] },
+  ];
+  var GOALS = STAGES[0].goals;
   var INIT = [
     { x: 0, y: 10, c: G.BLACK },
     { x: 0, y: 11, c: G.BLACK },
@@ -67,44 +73,87 @@ phina.globalize();
   function clonePoints(a) {
     return (a || []).map((p) => ({ x: p.x, y: p.y }));
   }
-  function encodeBoardCells(cells) {
+  // 正式な保存・共有形式: goals + cells。ステージ番号は持たない。
+  // URLでは1つのpパラメータにJSONをURL-safe Base64化して格納する。
+  function bytesToUrlBase64(bytes) {
+    var binary = String.fromCharCode.apply(null, bytes);
+    return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+  }
+  function urlBase64ToBytes(payload) {
+    var base64 = payload.replace(/-/g, "+").replace(/_/g, "/");
+    while (base64.length % 4) base64 += "=";
+    var binary = atob(base64);
+    return Array.from(binary, (ch) => ch.charCodeAt(0));
+  }
+  function encodeCells(cells) {
     var bytes = [];
     for (var i = 0; i < cells.length; i += 4) {
       var byte = 0;
       for (var j = 0; j < 4; j++) {
-        var v = cells[i + j] === G.BLACK ? 1 : cells[i + j] === G.WHITE ? 2 : 0;
+        var value = cells[i + j];
+        var v = value === G.BLACK ? 1 : value === G.WHITE ? 2 : 0;
         byte |= v << (j * 2);
       }
       bytes.push(byte);
     }
-    var binary = String.fromCharCode.apply(null, bytes);
-    return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+    return bytesToUrlBase64(bytes);
   }
-  function decodeBoardCells(payload) {
-    var base64 = payload.replace(/-/g, "+").replace(/_/g, "/");
-    while (base64.length % 4) base64 += "=";
-    var binary = atob(base64);
+  function decodeCells(payload) {
+    var bytes = urlBase64ToBytes(payload);
     var cells = [];
-    for (var i = 0; i < binary.length; i++) {
-      var byte = binary.charCodeAt(i);
+    for (var i = 0; i < bytes.length; i++) {
       for (var j = 0; j < 4 && cells.length < S * S; j++) {
-        var v = (byte >> (j * 2)) & 3;
-        if (v === 3) throw new Error("共有データに不正な値があります");
+        var v = (bytes[i] >> (j * 2)) & 3;
+        if (v === 3) throw new Error("配置データに不正な値があります");
         cells.push(v === 1 ? G.BLACK : v === 2 ? G.WHITE : G.EMPTY);
       }
     }
-    if (cells.length !== S * S) throw new Error("共有データの長さが違います");
+    if (cells.length !== S * S) throw new Error("配置データの長さが違います");
     return cells;
+  }
+  function validateGoals(goals) {
+    if (!Array.isArray(goals) || goals.length < 1) throw new Error("ゴール情報がありません");
+    var seen = Object.create(null);
+    return goals.map((goal) => {
+      var x = Number(goal.x), y = Number(goal.y);
+      if (!Number.isInteger(x) || !Number.isInteger(y) || x < 0 || y < 0 || x >= S || y >= S)
+        throw new Error("ゴール座標が不正です");
+      var key = x + "," + y;
+      if (seen[key]) throw new Error("ゴール座標が重複しています");
+      seen[key] = true;
+      return { x: x, y: y };
+    });
+  }
+  function encodePosition(position) {
+    var compact = {
+      v: 1,
+      g: validateGoals(position.goals).map((goal) => [goal.x, goal.y]),
+      c: encodeCells(position.cells),
+    };
+    var utf8 = unescape(encodeURIComponent(JSON.stringify(compact)));
+    return btoa(utf8).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+  }
+  function decodePosition(payload) {
+    var base64 = payload.replace(/-/g, "+").replace(/_/g, "/");
+    while (base64.length % 4) base64 += "=";
+    var json = decodeURIComponent(escape(atob(base64)));
+    var data = JSON.parse(json);
+    if (!data || data.v !== 1 || !Array.isArray(data.g) || typeof data.c !== "string")
+      throw new Error("未対応の配置形式です");
+    return {
+      version: 1,
+      size: S,
+      goals: validateGoals(data.g.map((g) => ({ x: g[0], y: g[1] }))),
+      cells: decodeCells(data.c),
+    };
   }
   function readSharedBoardFromUrl() {
     try {
       var raw = new URLSearchParams(window.location.search).get("p");
       if (!raw) return null;
-      var parts = raw.split(".");
-      if (parts.length !== 2 || parts[0] !== "1") throw new Error("未対応の共有形式です");
-      return { version: 1, size: S, cells: decodeBoardCells(parts[1]) };
+      return decodePosition(raw);
     } catch (e) {
-      console.warn("共有盤面を読み込めませんでした", e);
+      console.warn("共有配置を読み込めませんでした", e);
       return null;
     }
   }
@@ -143,6 +192,32 @@ phina.globalize();
         .addChildTo(this);
     },
   });
+  phina.define("StageSelectScene", {
+    superClass: "DisplayScene",
+    init: function (options) {
+      this.superInit({ width: W, height: H }); options = options || {};
+      this.backgroundColor = "rgba(0,0,0,0.18)";
+      // 初回・通常時とも同じ大きさと同じ配置にする。
+      RectangleShape({ width:460, height:680, cornerRadius:22, fill:"rgba(20,35,45,0.97)", stroke:"#fff", strokeWidth:4 })
+        .setPosition(W/2,H/2).addChildTo(this);
+      Label({ text:"ステージをえらぶ", fontSize:34, fill:"#fff", fontWeight:"bold" }).setPosition(W/2,325).addChildTo(this);
+      [440,540,640,740].forEach((y,index) => {
+        var stage=STAGES[index];
+        var b=btn(this,W/2,y,340,stage.name+"　G × "+stage.goals.length,"#1976d2",()=>{});
+        b.onpointend=()=>{ if(options.onSelect) options.onSelect(stage); setTimeout(()=>this.app.popScene(),0); };
+      });
+
+      // 閉じるボタン自体は常に表示し、初回だけ非活性にする。
+      var closeButton=btn(this,W/2,865,260,"閉じる","#607d8b",()=>{});
+      if(options.canClose){
+        closeButton.onpointend=()=>setTimeout(()=>this.app.popScene(),0);
+      } else {
+        closeButton.fill="#777777";
+        closeButton.alpha=0.55;
+        closeButton.setInteractive(false);
+      }
+    },
+  });
   phina.define("WorkMenuScene", {
     superClass: "DisplayScene",
     init: function (options) {
@@ -150,7 +225,7 @@ phina.globalize();
       options = options || {};
       this.backgroundColor = "rgba(0,0,0,0.15)";
       RectangleShape({
-        width: 350, height: 450, cornerRadius: 18,
+        width: 350, height: 530, cornerRadius: 18,
         fill: "rgba(20,35,45,0.96)", stroke: "#fff", strokeWidth: 4,
       }).setPosition(W / 2, 575).addChildTo(this);
       var menuButton = (y, text, color, action) => {
@@ -160,11 +235,12 @@ phina.globalize();
           setTimeout(() => this.app.popScene(), 0);
         };
       };
-      menuButton(420, "この配置を保存", "#ef6c00", options.onSave);
-      menuButton(500, "保存した配置を読込", "#1976d2", options.onLoad);
-      menuButton(580, "共有リンクをコピー", "#4A4A44", options.onShare);
-      menuButton(660, "タイトルへ戻る", "#795548", options.onTitle);
-      menuButton(740, "閉じる", "#607d8b", null);
+      menuButton(380, "ステージをえらぶ", "#00897b", options.onStageSelect);
+      menuButton(470, "この配置を保存", "#ef6c00", options.onSave);
+      menuButton(550, "保存した配置を読込", "#1976d2", options.onLoad);
+      menuButton(630, "共有リンクをコピー", "#4A4A44", options.onShare);
+      menuButton(710, "タイトルへ戻る", "#795548", options.onTitle);
+      menuButton(790, "閉じる", "#607d8b", null);
     },
   });
   phina.define("MainScene", {
@@ -198,12 +274,16 @@ phina.globalize();
       this.playbackInterval = 200;
       this.simulationResult = null;
       this.goalReached = false;
+      this.currentStageId = 1;
+      this.goals = GOALS.map((goal) => ({ x: goal.x, y: goal.y }));
+      this.reachedGoalKeys = Object.create(null);
+      this.goalFadeAnimatingKey = null;
       this.piAnimating = false;
       this.stoneSprites = [];
       this.displayedCells = Array(S * S).fill(-1);
       this.displayedLastKey = "";
       this.moveEffectKey = "";
-      this.storageKey = "pitagora-shicho-board-v1";
+      this.storageKey = "pitagora-shicho-position";
       this.workMenuOpen = false;
       this.workMenuObjects = [];
       // 編集時の短押し/長押し判定用。短押し=白、350ms長押し=黒。
@@ -212,10 +292,12 @@ phina.globalize();
       this.placePressCancelDistance = 32;
       this.sharedBoardLoaded = false;
       if (SHARED_BOARD) {
-        this.board = new G.GoBoard(S, SHARED_BOARD.cells);
+        this.currentStageId = null;
+        this.goals = SHARED_BOARD.goals.map((goal) => ({ x: goal.x, y: goal.y }));
+        this.board = new G.GoBoard(S, SHARED_BOARD.cells.slice());
         INIT.forEach((stone) => this.board.set(stone.x, stone.y, stone.c));
         this.board.set(TARGET.x, TARGET.y - 1, G.EMPTY);
-        this.board.set(GOAL.x, GOAL.y, G.EMPTY);
+        this.goals.forEach((goal) => this.board.set(goal.x, goal.y, G.EMPTY));
         this.tutorialActive = false;
         this.sharedBoardLoaded = true;
       }
@@ -223,6 +305,7 @@ phina.globalize();
       this.base = DisplayElement().addChildTo(this.boardLayer);
       this.drawBase();
       this.createBoardSprites();
+      this.ensureGoalSprites();
       this.tutorialBoardOffsetY = 185;
       if (this.tutorialActive) this.boardLayer.y = this.tutorialBoardOffsetY;
       this.msg = Label({
@@ -273,7 +356,8 @@ phina.globalize();
       this.showTutorialStep();
     },
     toggleWorkMenu: function () {
-      if (this.tutorialActive || this.running || this.replaying) return;
+      if(this.tutorialActive || this.running) return;
+      if(this.replaying && !this.replayPaused){ this.replayPaused=true; this.tweener.clear(); this.updateButtons(); }
       this.openWorkMenu();
     },
     openWorkMenu: function () {
@@ -283,27 +367,68 @@ phina.globalize();
         onSave: function () { mainScene.saveBoardToLocalStorage(); },
         onLoad: function () { mainScene.loadBoardFromLocalStorage(); },
         onShare: function () { mainScene.copyShareUrl(); },
+        onStageSelect: function () { setTimeout(() => mainScene.openStageSelect(true), 30); },
         onTitle: function () { mainScene.returnToTitle(); },
       }));
     },
     closeWorkMenu: function () {
       // 互換用：作品メニューは専用SceneなのでMainScene側では処理不要。
     },
+    openStageSelect: function (canClose) {
+      if (!this.app) return; var mainScene=this;
+      this.app.pushScene(StageSelectScene({ canClose:!!canClose, onSelect:function(stage){ mainScene.selectStage(stage); } }));
+    },
+    selectStage: function (stage) {
+      if(!stage) return;
+      this.currentStageId=stage.id; this.goals=stage.goals.map((g)=>({x:g.x,y:g.y}));
+      this.ensureGoalSprites();
+      this.tweener.clear(); this.board=newBoard(); this.invalidateStoneDisplay();
+      this.target={x:TARGET.x,y:TARGET.y}; this.turn="white"; this.running=false; this.replaying=false; this.replayPaused=false; this.canStart=true; this.editBoard=null;
+      this.frames=[]; this.runMoves=[]; this.previousRunMoves=null; this.compareAfterEdit=false; this.beforeEditCells=null; this.simulationResult=null;
+      this.goalReached=false; this.reachedGoalKeys=Object.create(null); this.goalFadeAnimatingKey=null; this.piAnimating=false; this.replayCurrentIndex=-1;
+      this.setReplayNavVisible(false); this.clearHints(); this.last=null;
+      // ステージ番号に依存しない通常の編集メッセージへ統一する。
+      // URL共有/LocalStorageから独立配置を開く場合にも同じ文言を使える。
+      this.msg.text = "自由に石を置こう！\nタップで白、長押しで黒だよ";
+      this.render(); this.updateButtons();
+    },
     returnToTitle: function () {
       // WorkMenuSceneがpopされた直後にMainSceneを終了し、タイトルへ戻す。
       setTimeout(() => this.exit("title"), 30);
     },
+    ensureGoalSprites: function () {
+      this.goals.forEach((goal) => {
+        var key = this.goalKey(goal);
+        if (this.goalSprites.some((item) => this.goalKey(item.goal) === key)) return;
+        var gp = pos(goal.x, goal.y);
+        // 動的追加でも石より奥になるよう、既存石をいったん前面へ追加し直すことはせず、
+        // G自体は盤面上で石に隠れてよい仕様なので通常描画順を維持する。
+        var circle = CircleShape({ radius:23, fill:"#ffff00", stroke:"#000", strokeWidth:8 })
+          .setPosition(gp.x,gp.y).addChildTo(this.boardLayer);
+        var label = Label({ text:"Ｇ", fontSize:24, fill:"#000", fontWeight:"bold" })
+          .setPosition(gp.x,gp.y).addChildTo(this.boardLayer);
+        this.goalSprites.push({ goal:{x:goal.x,y:goal.y}, circle:circle, label:label });
+      });
+    },
+    currentPositionData: function () {
+      return {
+        version: 1,
+        size: S,
+        goals: this.goals.map((goal) => ({ x: goal.x, y: goal.y })),
+        cells: this.board.cells.slice(),
+      };
+    },
     normalizeBoardForEditing: function (board) {
       INIT.forEach((stone) => board.set(stone.x, stone.y, stone.c));
       board.set(TARGET.x, TARGET.y - 1, G.EMPTY);
-      board.set(GOAL.x, GOAL.y, G.EMPTY);
+      this.goals.forEach((goal) => board.set(goal.x, goal.y, G.EMPTY));
       return board;
     },
     createShareUrl: function () {
       if (!this.canStart || this.running || this.replaying) return null;
-      var cells = this.board.cells.slice();
-      var payload = "1." + encodeBoardCells(cells);
+      var payload = encodePosition(this.currentPositionData());
       var url = new URL(window.location.href);
+      url.search = "";
       url.searchParams.set("p", payload);
       return url.toString();
     },
@@ -336,13 +461,9 @@ phina.globalize();
       } catch (e) { failed(e); }
     },
     serializeBoardForStorage: function () {
-      // INIT/Gは復元時に正規化するので、現在の編集盤面をそのまま保存してよい。
-      return {
-        version: 1,
-        size: S,
-        cells: this.board.cells.slice(),
-        savedAt: new Date().toISOString(),
-      };
+      var data = this.currentPositionData();
+      data.savedAt = new Date().toISOString();
+      return data;
     },
     saveBoardToLocalStorage: function () {
       if (!this.canStart || this.running || this.replaying) return;
@@ -357,42 +478,23 @@ phina.globalize();
     loadBoardFromLocalStorage: function () {
       try {
         var raw = localStorage.getItem(this.storageKey);
-        if (!raw) {
-          this.msg.text = "保存した配置がありません";
-          return;
-        }
+        if (!raw) { this.msg.text = "保存した配置がありません"; return; }
         var data = JSON.parse(raw);
         if (!data || data.version !== 1 || data.size !== S || !Array.isArray(data.cells) || data.cells.length !== S * S)
           throw new Error("保存データの形式が違います");
-
-        var loaded = new G.GoBoard(S, data.cells);
-        this.board = loaded;
-        // 固定初期石、発火前の空点、Gを現在ルールに合わせて正規化する。
+        this.currentStageId = null;
+        this.goals = validateGoals(data.goals);
+        this.ensureGoalSprites();
+        this.board = new G.GoBoard(S, data.cells.slice());
         this.normalizeBoardForEditing(this.board);
-
         this.invalidateStoneDisplay();
-        this.target = { x: TARGET.x, y: TARGET.y };
-        this.turn = "white";
-        this.running = false;
-        this.replaying = false;
-        this.replayPaused = false;
-        this.canStart = true;
-        this.editBoard = null;
-        this.frames = [];
-        this.runMoves = [];
-        this.previousRunMoves = null;
-        this.compareAfterEdit = false;
-      this.beforeEditCells = null;
-        this.simulationResult = null;
-        this.goalReached = false;
-        this.piAnimating = false;
-        this.replayCurrentIndex = -1;
-        this.setReplayNavVisible(false);
-        this.clearHints();
-        this.last = null;
-          this.msg.text = "保存した配置を読み込みました";
-        this.render();
-        this.updateButtons();
+        this.target = { x: TARGET.x, y: TARGET.y }; this.turn = "white";
+        this.running=false; this.replaying=false; this.replayPaused=false; this.canStart=true; this.editBoard=null;
+        this.frames=[]; this.runMoves=[]; this.previousRunMoves=null; this.compareAfterEdit=false; this.beforeEditCells=null; this.simulationResult=null;
+        this.goalReached=false; this.reachedGoalKeys=Object.create(null); this.goalFadeAnimatingKey=null; this.piAnimating=false; this.replayCurrentIndex=-1;
+        this.setReplayNavVisible(false); this.clearHints(); this.last=null;
+        this.msg.text = "自由に石を置こう！\nタップで白、長押しで黒だよ";
+        this.render(); this.updateButtons();
       } catch (e) {
         console.error("盤面の読込に失敗", e);
         this.msg.text = "読み込めませんでした";
@@ -461,6 +563,11 @@ phina.globalize();
       this.branchMarkers = f.branchMarkers || [];
       this.captureMoves = f.captureMoves || [];
       this.captureStones = f.captureStones || [];
+      var previousReachedKeys = Object.assign({}, this.reachedGoalKeys);
+      this.reachedGoalKeys = Object.assign(Object.create(null), f.reachedGoalKeys || {});
+      var newlyReachedGoals = this.goals.filter((goal) =>
+        !previousReachedKeys[this.goalKey(goal)] && this.reachedGoalKeys[this.goalKey(goal)],
+      );
       this.msg.text = f.text;
       if (!this.goalReached && index === this.frames.length - 1) {
         SoundManager.play('failSound');
@@ -478,6 +585,9 @@ phina.globalize();
         }, 0);
       } else {
         this.render();
+        if (!this.goalReached && newlyReachedGoals.length) {
+          newlyReachedGoals.forEach((goal) => this.animatePassedGoal(goal));
+        }
       }
       // 自動再生中、新しく石が置かれたフレームだけ着手エフェクト
       if (!this.replayPaused && f.last) {
@@ -601,16 +711,16 @@ phina.globalize();
           .addChildTo(this);
         this.addTutorial(arrow);
       } else if (this.tutorialStep === 2) {
-        var goalP = pos(GOAL.x, GOAL.y);
+        var goalP = pos(this.goals[0].x, this.goals[0].y);
         this.addSpotlightCurtains(goalP.x, goalP.y, C * 2.2, C * 2.2);
         text = "白がここまで来たらゴールです";
         var arrow = Sprite("arrow")
-          .setPosition(W / 2 + 190, 630)
+          .setPosition(W / 2 + 135, 590)
           .addChildTo(this);
         arrow.scaleX *= -1;
         this.addTutorial(arrow);
-      } else {
-        // 最後は盤面全体を見せ、濃色パネルで文章の視認性を確保する。
+      } else if (this.tutorialStep === 3) {
+        // 盤面全体を見せ、濃色パネルで文章の視認性を確保する。
         var panel = RectangleShape({
           width: 590, height: 330, cornerRadius: 22,
           fill: "rgba(0,0,0,0.62)", stroke: "transparent",
@@ -618,6 +728,10 @@ phina.globalize();
         this.addTutorial(panel);
         text = "自由に石を置いて\n白石をゴールへみちびこう！\n\nなお、このゲームでは\n黒石が取られたらそこで終わり、\nというルールにしています";
         textY = 520;
+      } else {
+        var panel = RectangleShape({ width:590, height:280, cornerRadius:22, fill:"rgba(0,0,0,0.62)", stroke:"transparent" }).setPosition(W/2,520).addChildTo(this);
+        this.addTutorial(panel);
+        text = "Gがいくつかあるステージでは\n全部のGを通ればゴール！\n\n通る順番は自由です"; textY=520;
       }
       this.addTutorial(Label({
         text: text, fontSize: 34, fill: "#fff", fontWeight: "bold",
@@ -630,19 +744,20 @@ phina.globalize();
     },
     nextTutorial: function () {
       if (!this.tutorialActive) return;
-      if (this.tutorialStep < 3) {
+      if (this.tutorialStep < 4) {
         this.tutorialStep += 1;
         this.showTutorialStep();
         return;
       }
       // 説明を消し、中央の盤面を通常位置へスッと戻してから操作を解放する。
       this.clearTutorial();
-      this.boardLayer.tweener.clear().to({ y: 0 }, 350, "easeInBack").call(() => {
+      this.boardLayer.tweener.clear().to({ y: 0 }, 350, "easeOutQuad").call(() => {
         this.tutorialActive = false;
         this.setMainButtonsVisible(true);
         this.setReplayNavVisible(false);
         this.msg.text = "自由に石を置こう！\nタップで白、長押しで黒だよ";
         this.updateButtons();
+        this.openStageSelect(false);
       });
     },
     setMainButtonsVisible: function (visible) {
@@ -686,7 +801,7 @@ phina.globalize();
         this.resetButton.setInteractive(false);
         this.replayButton.setInteractive(false);
       }
-      var workEnabled = !this.tutorialActive && !this.running && !this.replaying && this.canStart;
+      var workEnabled = !this.tutorialActive && !this.running;
       if (this.workButton) {
         this.workButton.alpha = workEnabled ? 1 : 0.45;
         this.workButton.setInteractive(workEnabled);
@@ -717,6 +832,7 @@ phina.globalize();
       this.fi = 0;
       this.replayCurrentIndex = -1;
       this.goalReached = false;
+      this.reachedGoalKeys = Object.create(null);
       this.setReplayNavVisible(true);
       this.updateButtons();
       this.playFrame();
@@ -739,6 +855,8 @@ phina.globalize();
       this.compareAfterEdit = this.previousRunMoves.length > 0;
       this.frames = [];
       this.goalReached = false;
+      this.reachedGoalKeys = Object.create(null);
+      this.goalFadeAnimatingKey = null;
       this.piAnimating = false;
       this.replayCurrentIndex = -1;
       this.setReplayNavVisible(false);
@@ -788,11 +906,13 @@ phina.globalize();
       });
     },
     createBoardSprites: function () {
-      var gp = pos(GOAL.x, GOAL.y);
-      this.goalCircle = CircleShape({ radius:23, fill:"#ffff00", stroke:"#000", strokeWidth:8 })
-        .setPosition(gp.x, gp.y).addChildTo(this.boardLayer);
-      this.goalLabel = Label({ text:"Ｇ", fontSize:24, fill:"#000", fontWeight:"bold" })
-        .setPosition(gp.x, gp.y).addChildTo(this.boardLayer);
+      this.goalSprites=[];
+      STAGES[3].goals.forEach((goal)=>{
+        var gp=pos(goal.x,goal.y);
+        var circle=CircleShape({radius:23,fill:"#ffff00",stroke:"#000",strokeWidth:8}).setPosition(gp.x,gp.y).addChildTo(this.boardLayer);
+        var label=Label({text:"Ｇ",fontSize:24,fill:"#000",fontWeight:"bold"}).setPosition(gp.x,gp.y).addChildTo(this.boardLayer);
+        this.goalSprites.push({goal:{x:goal.x,y:goal.y},circle:circle,label:label});
+      });
       for (var y=0; y<S; y++) {
         this.stoneSprites[y] = [];
         for (var x=0; x<S; x++) {
@@ -977,6 +1097,27 @@ phina.globalize();
     render: function () {
       this.clear();
       this.updateStoneSprites();
+      this.goalSprites.forEach((item) => {
+        var key = this.goalKey(item.goal);
+        var active = this.goals.some((goal) => this.goalKey(goal) === key);
+        var reached = !!this.reachedGoalKeys[key];
+        var animating = active && this.goalFadeAnimatingKey === key;
+        if (!active) { item.circle.visible=false; item.label.visible=false; return; }
+        if (!animating) {
+          item.circle.tweener.clear();
+          item.label.tweener.clear();
+          item.circle.y = pos(item.goal.x, item.goal.y).y;
+          item.label.y = pos(item.goal.x, item.goal.y).y;
+          item.circle.scaleX = item.circle.scaleY = 1;
+          item.label.scaleX = item.label.scaleY = 1;
+          item.circle.alpha = 1;
+          item.label.alpha = 1;
+          item.circle.fill = "#ffff00";
+          item.label.text = "Ｇ";
+          item.circle.visible = !reached;
+          item.label.visible = !reached;
+        }
+      });
       var p;
       for (var m of this.branchMarkers) {
         p = pos(m.x, m.y);
@@ -1043,10 +1184,60 @@ phina.globalize();
     },
     fixed: function (x, y) {
       return (
-        (x === GOAL.x && y === GOAL.y) ||
+        this.goals.some((goal) => x === goal.x && y === goal.y) ||
         (x === TARGET.x && y === TARGET.y - 1) ||
         INIT.some((s) => s.x === x && s.y === y)
       );
+    },
+    goalKey: function (goal) { return goal.x + "," + goal.y; },
+    remainingGoals: function () {
+      return this.goals.filter((goal) => !this.reachedGoalKeys[this.goalKey(goal)]);
+    },
+    markReachedGoals: function (goals) {
+      (goals || []).forEach((goal) => { this.reachedGoalKeys[this.goalKey(goal)] = true; });
+    },
+    reachedGoalCount: function () { return this.goals.length - this.remainingGoals().length; },
+    goalSpriteFor: function (goal) {
+      var key = this.goalKey(goal);
+      return this.goalSprites.find((item) => this.goalKey(item.goal) === key) || null;
+    },
+    animatePassedGoal: function (goal) {
+      var item = this.goalSpriteFor(goal);
+      if (!item || this.goals.length <= 1) return;
+      var key = this.goalKey(goal);
+      this.goalFadeAnimatingKey = key;
+
+      // 元のGは碁石より奥にあるため非表示にし、演出専用のコピーを
+      // boardLayerの最後に追加する。これにより白石より手前で「ふわっ」と消える。
+      item.circle.visible = false;
+      item.label.visible = false;
+      var gp = pos(goal.x, goal.y);
+      var floatingCircle = CircleShape({
+        radius: 23, fill: "#ffff00", stroke: "#000", strokeWidth: 8,
+      }).setPosition(gp.x, gp.y).addChildTo(this.boardLayer);
+      var floatingLabel = Label({
+        text: "Ｇ", fontSize: 24, fill: "#000", fontWeight: "bold",
+      }).setPosition(gp.x, gp.y).addChildTo(this.boardLayer);
+
+      var finished = 0;
+      var finishOne = (sprite) => {
+        sprite.remove();
+        finished++;
+        if (finished === 2 && this.goalFadeAnimatingKey === key) {
+          this.goalFadeAnimatingKey = null;
+        }
+      };
+
+      [floatingCircle, floatingLabel].forEach((sprite) => {
+        sprite.tweener.clear()
+          .to({
+            y: gp.y - 45,
+            alpha: 0,
+            scaleX: 1.18,
+            scaleY: 1.18,
+          }, 420, "easeOutQuad")
+          .call(() => finishOne(sprite));
+      });
     },
     clearHints: function () {
       this.branchMarkers = [];
@@ -1179,6 +1370,7 @@ phina.globalize();
         branchMarkers: clonePoints(this.branchMarkers),
         captureMoves: clonePoints(this.captureMoves),
         captureStones: clonePoints(this.captureStones),
+        reachedGoalKeys: Object.assign({}, this.reachedGoalKeys),
         text: text,
       });
     },
@@ -1219,6 +1411,8 @@ phina.globalize();
       this.runMoves = [];
       this.simulationResult = null;
       this.goalReached = false;
+      this.reachedGoalKeys = Object.create(null);
+      this.goalFadeAnimatingKey = null;
       this.piAnimating = false;
       this.replayCurrentIndex = -1;
       this.setReplayNavVisible(true);
@@ -1257,27 +1451,33 @@ phina.globalize();
       var success = false;
 
       for (var i = 0; i < maxMoves; i++) {
-        var engine = new G.LadderEngine(this.board, this.target, GOAL);
+        var engine = new G.LadderEngine(this.board, this.target, this.remainingGoals());
         var r;
 
         if (this.turn === "white") {
           r = engine.stepWhite();
           if (r.status === "goal") {
-            if (r.board) { this.board = r.board; this.moveCount++; }
+            if (r.board) {
+              this.board = r.board; this.target = r.target || this.target; this.moveCount++;
+              this.recordRunMove(G.WHITE, r.move);
+            }
             this.last = r.move || this.last;
-            this.recordRunMove(G.WHITE, r.move);
+            this.markReachedGoals(r.goals);
             this.clearHints();
-            resultText = "ゴール！（" + this.moveCount + "手）";
-            this.goalReached = true;
-            this.save(resultText);
-            success = true;
-            break;
+            var reachedCount = this.reachedGoalCount();
+            if (reachedCount >= this.goals.length) {
+              resultText = "ゴール！（" + this.moveCount + "手）";
+              this.goalReached = true; this.save(resultText); success = true; break;
+            }
+            this.turn = "black";
+            this.save("Ｇ通過！（" + reachedCount + " / " + this.goals.length + "）");
+            continue;
           }
           if (r.status === "white-branch" && r.board) {
             this.board = r.board; this.target = r.target; this.last = r.move; this.moveCount++;
             this.recordRunMove(G.WHITE, r.move);
             this.clearHints(); this.save("白が逃げる");
-            var explanation = new G.LadderEngine(this.board, this.target, GOAL).explainBranch(this.board, this.target);
+            var explanation = new G.LadderEngine(this.board, this.target, this.remainingGoals()).explainBranch(this.board, this.target);
             if (explanation) {
               this.board = explanation.board; this.last = explanation.move; this.branchMarkers = explanation.liberties;
               this.recordRunMove(G.BLACK, explanation.move);
@@ -1334,9 +1534,9 @@ phina.globalize();
       this.playFrame();
     },
     showPiFlag: function (animate) {
-      if (!this.goalReached || this.board.get(GOAL.x, GOAL.y) !== G.WHITE) return;
+      if (!this.goalReached || !this.last) return;
 
-      var gp = pos(GOAL.x, GOAL.y);
+      var gp = pos(this.last.x, this.last.y);
       var flag = Sprite("pi")
         // 左下を白石中央に合わせ、回転支点にもする。
         .setOrigin(0, 1)
@@ -1360,7 +1560,7 @@ phina.globalize();
         .to({ rotation: 0 }, 90, "easeOutQuad");
     },
     showGoalCelebration: function () {
-      var center = pos(GOAL.x, GOAL.y);
+      var center = pos(this.last.x, this.last.y);
       var colors = ["#ffd600", "#ff5252", "#42a5f5", "#ffffff"];
       var count = 24;
 
@@ -1461,6 +1661,8 @@ phina.globalize();
       this.beforeEditCells = null;
       this.simulationResult = null;
       this.goalReached = false;
+      this.reachedGoalKeys = Object.create(null);
+      this.goalFadeAnimatingKey = null;
       this.piAnimating = false;
       this.replayCurrentIndex = -1;
       this.setReplayNavVisible(false);
