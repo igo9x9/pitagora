@@ -410,12 +410,18 @@ phina.globalize();
         this.goalSprites.push({ goal:{x:goal.x,y:goal.y}, circle:circle, label:label });
       });
     },
+    boardForExport: function () {
+      // 編集中は現在盤面。START後は実行結果ではなく、START直前の配置を保存・共有する。
+      if (this.canStart) return this.board;
+      if (this.editBoard) return this.editBoard;
+      return this.board;
+    },
     currentPositionData: function () {
       return {
         version: 1,
         size: S,
         goals: this.goals.map((goal) => ({ x: goal.x, y: goal.y })),
-        cells: this.board.cells.slice(),
+        cells: this.boardForExport().cells.slice(),
       };
     },
     normalizeBoardForEditing: function (board) {
@@ -425,7 +431,7 @@ phina.globalize();
       return board;
     },
     createShareUrl: function () {
-      if (!this.canStart || this.running || this.replaying) return null;
+      if (this.running) return null;
       var payload = encodePosition(this.currentPositionData());
       var url = new URL(window.location.href);
       url.search = "";
@@ -466,7 +472,7 @@ phina.globalize();
       return data;
     },
     saveBoardToLocalStorage: function () {
-      if (!this.canStart || this.running || this.replaying) return;
+      if (this.running) return;
       try {
         localStorage.setItem(this.storageKey, JSON.stringify(this.serializeBoardForStorage()));
         this.msg.text = "この配置を保存しました";
