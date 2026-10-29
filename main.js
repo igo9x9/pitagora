@@ -232,7 +232,7 @@ phina.globalize();
       options = options || {};
       this.backgroundColor = "rgba(0,0,0,0.15)";
       RectangleShape({
-        width: 350, height: 530, cornerRadius: 18,
+        width: 350, height: 660, cornerRadius: 18,
         fill: "rgba(20,35,45,0.96)", stroke: "#fff", strokeWidth: 4,
       }).setPosition(W / 2, 575).addChildTo(this);
       var menuButton = (y, text, color, action) => {
@@ -242,12 +242,12 @@ phina.globalize();
           setTimeout(() => this.app.popScene(), 0);
         };
       };
-      menuButton(380, "ステージをえらぶ", "#00897b", options.onStageSelect);
-      menuButton(470, "この配置を保存", "#ef6c00", options.onSave);
-      menuButton(550, "保存した配置を読込", "#1976d2", options.onLoad);
+      menuButton(320, "ステージをえらぶ", "#00897b", options.onStageSelect);
+      menuButton(430, "この配置を保存", "#ef6c00", options.onSave);
+      menuButton(520, "保存した配置を読込", "#1976d2", options.onLoad);
       menuButton(630, "共有リンクをコピー", "#4A4A44", options.onShare);
-      menuButton(710, "タイトルへ戻る", "#795548", options.onTitle);
-      menuButton(790, "閉じる", "#607d8b", null);
+      menuButton(740, "タイトルへ戻る", "#795548", options.onTitle);
+      menuButton(830, "閉じる", "#607d8b", null);
     },
   });
   phina.define("MainScene", {
@@ -733,19 +733,19 @@ phina.globalize();
     showTutorialStep: function () {
       this.clearTutorial();
       if (!this.tutorialActive) return;
-      var text = "", textX = W / 2, textY = 510, arrow = null;
+      var text = "", textX = W / 2, textY = 490, arrow = null;
       if (this.tutorialStep === 1) {
         var startP = pos(TARGET.x, TARGET.y);
         this.addSpotlightCurtains(startP.x - C * 0.45, startP.y, C * 4, C * 3.2);
-        text = "ここから白が逃げ出します\n黒はシチョウで追いかけます";
+        text = "このゲームはシチョウで遊びます\n\nここから白が逃げ出して\n黒がシチョウで追いかけます";
         arrow = Sprite("arrow")
-          .setPosition(W / 2 - 240, 650)
+          .setPosition(W / 2 - 240, 630)
           .addChildTo(this);
         this.addTutorial(arrow);
       } else if (this.tutorialStep === 2) {
         var goalP = pos(this.goals[0].x, this.goals[0].y);
         this.addSpotlightCurtains(goalP.x, goalP.y, C * 2.2, C * 2.2);
-        text = "白がここまで来たらゴールです";
+        text = "白がG（ゴール）に来れたら\nステージクリアです";
         arrow = Sprite("arrow")
           .setPosition(W / 2 + 135, 590)
           .addChildTo(this);
@@ -763,7 +763,7 @@ phina.globalize();
       } else {
         var panel = RectangleShape({ width:590, height:280, cornerRadius:22, fill:"rgba(0,0,0,0.62)", stroke:"transparent" }).setPosition(W/2,520).addChildTo(this);
         this.addTutorial(panel);
-        text = "なお、このゲームでは\n黒石が取られると終わりです\n（なのでホウリコミはできません）";
+        text = "なお、このゲームでは\n黒石が取られると失敗です\n（なのでホウリコミはできません）";
         textY = 520;
       }
       var tutorialText = Label({
@@ -772,8 +772,8 @@ phina.globalize();
       }).setPosition(textX, textY).addChildTo(this);
       this.addTutorial(tutorialText);
       // 説明文 → 矢印の順で、軽くポンッと時間差表示する。
-      var textDelay = this.tutorialStep === 1 ? 140 : 50;
-      var arrowDelay = this.tutorialStep === 1 ? 330 : 190;
+      var textDelay = this.tutorialStep === 1 ? 300 : 50;
+      var arrowDelay = this.tutorialStep === 1 ? 500 : 190;
       this.popTutorialElement(tutorialText, textDelay, 0.84);
       if (arrow) this.popTutorialElement(arrow, arrowDelay, 0.72);
       // this.addTutorial(Label({
