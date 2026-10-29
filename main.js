@@ -1461,6 +1461,33 @@ phina.globalize();
         }
       }
     },
+    blackCanCaptureTargetImmediately: function () {
+      var targetGroup = this.board.groupAt(this.target.x, this.target.y);
+      if (!targetGroup || targetGroup.color !== G.WHITE) return false;
+
+      // playableフラグには依存せず、実際の気すべてへ黒を仮着手する。
+      // play()が合法性と捕獲を確定し、capturedに対象白石が含まれるかで判定する。
+      var targetKeys = Object.create(null);
+      targetGroup.stones.forEach((stone) => {
+        targetKeys[stone.x + "," + stone.y] = true;
+      });
+
+      for (var liberty of targetGroup.liberties) {
+        var result = this.board.play(liberty.x, liberty.y, G.BLACK);
+        if (!result) continue;
+        var capturedTarget = (result.captured || []).some((stone) =>
+          targetKeys[stone.x + "," + stone.y],
+        );
+        if (capturedTarget) {
+          console.debug("[Ladder] 黒の即時捕獲を着手前に検出", {
+            move: { x: liberty.x, y: liberty.y },
+            captured: result.captured.length,
+          });
+          return true;
+        }
+      }
+      return false;
+    },
     calculateAll: function () {
       this.board = this.normal();
       this.invalidateStoneDisplay();
@@ -1537,8 +1564,20 @@ phina.globalize();
           this.recordRunMove(G.WHITE, r.move);
           this.clearHints(); this.save("白が逃げる");
         } else {
+          // 黒の次の1手で対象白一団が取られるなら、捕獲手を盤面へ反映する前に終了。
+          if (this.blackCanCaptureTargetImmediately()) {
+            resultText = "白はもう逃げられない！\n残念…";
+            this.save(resultText);
+            break;
+          }
           r = engine.chooseBlack();
           if (r.status !== "ok") { resultText = "黒はアタリを続けられない！\n残念…"; this.save(resultText); break; }
+          if (r.immediateCapture) {
+            // 次の黒手で白の捕獲が確定。白石を実際に消す前の盤面で終了する。
+            resultText = "白はもう逃げられない！\n残念…";
+            this.save(resultText);
+            break;
+          }
           this.board = r.board; this.target = r.target; this.turn = "white"; this.last = r.move; this.moveCount++;
           this.recordRunMove(G.BLACK, r.move);
           this.clearHints(); this.save("黒が追う");
