@@ -88,10 +88,10 @@
     }
   }
   class LadderEngine {
-    constructor(board, target, goal) {
+    constructor(board, target, goals) {
       this.board = board;
       this.target = target;
-      this.goal = goal;
+      this.goals = Array.isArray(goals) ? goals : goals ? [goals] : [];
       this.memo = Object.create(null);
       this.maxRead = board.size * board.size * 4;
     }
@@ -101,10 +101,14 @@
     playable(b, g) {
       return b.playableLiberties(g);
     }
-    containsGoal(g) {
-      return (
-        g && g.stones.some((s) => s.x === this.goal.x && s.y === this.goal.y)
+    goalsInGroup(g) {
+      if (!g) return [];
+      return this.goals.filter((goal) =>
+        g.stones.some((stone) => stone.x === goal.x && stone.y === goal.y),
       );
+    }
+    containsGoal(g) {
+      return this.goalsInGroup(g).length > 0;
     }
     capturableBlackGroups(b, wg, escape) {
       var checked = Object.create(null),
@@ -142,7 +146,8 @@
       if (checkGoal === undefined) checkGoal = true;
       var g = this.targetGroup(b, t);
       if (!g) return { status: "captured" };
-      if (checkGoal && this.containsGoal(g)) return { status: "goal" };
+      if (checkGoal && this.containsGoal(g))
+        return { status: "goal", goals: this.goalsInGroup(g) };
       /* 白の選択肢は実際に着手できる気だけで判定する。 */ var pl =
           this.playable(b, g),
         escape = pl.length === 1 ? pl[0] : null,
@@ -167,7 +172,13 @@
       var eg = r.board.groupAt(m.x, m.y),
         next = this.playable(r.board, eg);
       if (checkGoal && this.containsGoal(eg))
-        return { status: "goal", move: m, board: r.board, target: m };
+        return {
+          status: "goal",
+          goals: this.goalsInGroup(eg),
+          move: m,
+          board: r.board,
+          target: m,
+        };
       if (next.length !== 2) {
         if (next.length > 2)
           return {
