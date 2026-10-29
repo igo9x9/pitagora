@@ -492,6 +492,7 @@
         move: z.candidate.move,
         board: z.candidate.board,
         target: z.candidate.target,
+        immediateCapture: !!z.candidate.immediateCapture,
       };
     }
     stepWhite() {
