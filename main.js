@@ -149,9 +149,24 @@ phina.globalize();
   }
   function readSharedBoardFromUrl() {
     try {
-      var raw = new URLSearchParams(window.location.search).get("p");
+      var url = new URL(window.location.href);
+      var raw = url.searchParams.get("p");
       if (!raw) return null;
-      return decodePosition(raw);
+
+      // まず復元
+      var position = decodePosition(raw);
+
+      // 正常に復元できてからpだけ削除
+      url.searchParams.delete("p");
+
+      history.replaceState(
+        null,
+        "",
+        url.toString()
+      );
+
+      return position;
+
     } catch (e) {
       console.warn("共有配置を読み込めませんでした", e);
       return null;
@@ -393,6 +408,7 @@ phina.globalize();
       this.render(); this.updateButtons();
     },
     returnToTitle: function () {
+      SHARED_BOARD = null;
       // WorkMenuSceneがpopされた直後にMainSceneを終了し、タイトルへ戻す。
       setTimeout(() => this.exit("title"), 30);
     },
