@@ -593,6 +593,9 @@ phina.globalize();
         this.render();
         if (!this.goalReached && newlyReachedGoals.length) {
           newlyReachedGoals.forEach((goal) => this.animatePassedGoal(goal));
+          setTimeout(() => {
+            SoundManager.play("pointSound");
+          }, 0);
         }
       }
       // 自動再生中、新しく石が置かれたフレームだけ着手エフェクト
@@ -1696,7 +1699,8 @@ phina.globalize();
           blackSound: "black.mp3",
           whiteSound: "white.mp3",
           goalSound: "goal.mp3",
-          failSound: "failed.mp3"
+          failSound: "failed.mp3",
+          pointSound: "point.mp3"
         },
       },
     }).run();
