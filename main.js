@@ -193,18 +193,10 @@ phina.globalize();
       var scale = targetWidth / titleLogo.width;
       titleLogo.setScale(scale);
 
-      btn(this, W / 2, 755, 330, "あそぶ", "#ef6c00", () => {
-      // 押下状態を先に1フレーム以上見せてからMainSceneを生成する。
-      this.tweener.clear().wait(110).call(() => this.exit("main"));
-    });
-      Label({
-        text: "シチョウでゴールを目指そう！",
-        fontSize: 28,
-        fill: "#fff",
-        lineHeight: 1.5,
-      })
-        .setPosition(W / 2, 900)
-        .addChildTo(this);
+      btn(this, W / 2, 800, 330, "あそぶ", "#ef6c00", () => {
+        // 押下状態を先に1フレーム以上見せてからMainSceneを生成する。
+        this.tweener.clear().wait(110).call(() => this.exit("main"));
+      });
     },
   });
   phina.define("StageSelectScene", {
@@ -286,7 +278,7 @@ phina.globalize();
       this.tutorialObjects = [];
       this.replayNavVisible = false;
       this.replayCurrentIndex = -1;
-      this.playbackInterval = 350;
+      this.playbackInterval = 300;
       this.simulationResult = null;
       this.goalReached = false;
       this.currentStageId = 1;
@@ -346,7 +338,7 @@ phina.globalize();
         .setPosition(190, BY + 92).addChildTo(this);
       this.nextReplayButton = btn(this, 285, BY + 92, 70, "▶", "#4A4A44", () => this.stepReplay(1));
       this.slowSpeedButton = btn(this, 410, BY + 92, 64, "遅", "#607d8b", () => this.setPlaybackSpeed(500));
-      this.normalSpeedButton = btn(this, 500, BY + 92, 64, "中", "#607d8b", () => this.setPlaybackSpeed(350));
+      this.normalSpeedButton = btn(this, 500, BY + 92, 64, "中", "#607d8b", () => this.setPlaybackSpeed(300));
       this.fastSpeedButton = btn(this, 590, BY + 92, 64, "速", "#607d8b", () => this.setPlaybackSpeed(150));
       this.setReplayNavVisible(false);
       this.updateSpeedButtons();
@@ -542,7 +534,7 @@ phina.globalize();
     updateSpeedButtons: function () {
       [
         { button: this.slowSpeedButton, value: 500 },
-        { button: this.normalSpeedButton, value: 350 },
+        { button: this.normalSpeedButton, value: 300 },
         { button: this.fastSpeedButton, value: 150 },
       ].forEach((item) => {
         if (!item.button) return;
@@ -600,6 +592,8 @@ phina.globalize();
         this.render();
         this.showPiFlag(true);
         this.showGoalCelebration();
+        // 「ゴール！」もポンッと拡大
+        this.showGoalEffect();
         this.piAnimating = false;
         // 音は次のイベントループへ
         setTimeout(() => {
@@ -723,15 +717,28 @@ phina.globalize();
         centerY: (holeTop + holeBottom) / 2,
       };
     },
+    popTutorialElement: function (element, delay, fromScale) {
+      if (!element) return;
+      var baseX = element.scaleX || 1;
+      var baseY = element.scaleY || 1;
+      var startScale = fromScale || 0.82;
+      element.alpha = 0;
+      element.scaleX = baseX * startScale;
+      element.scaleY = baseY * startScale;
+      element.tweener.clear()
+        .wait(delay || 0)
+        .to({ alpha: 1, scaleX: baseX * 1.06, scaleY: baseY * 1.06 }, 105, "easeOutQuad")
+        .to({ scaleX: baseX, scaleY: baseY }, 65, "easeOutQuad");
+    },
     showTutorialStep: function () {
       this.clearTutorial();
       if (!this.tutorialActive) return;
-      var text = "", textX = W / 2, textY = 510;
+      var text = "", textX = W / 2, textY = 510, arrow = null;
       if (this.tutorialStep === 1) {
         var startP = pos(TARGET.x, TARGET.y);
         this.addSpotlightCurtains(startP.x - C * 0.45, startP.y, C * 4, C * 3.2);
         text = "ここから白が逃げ出します\n黒はシチョウで追いかけます";
-        var arrow = Sprite("arrow")
+        arrow = Sprite("arrow")
           .setPosition(W / 2 - 240, 650)
           .addChildTo(this);
         this.addTutorial(arrow);
@@ -739,7 +746,7 @@ phina.globalize();
         var goalP = pos(this.goals[0].x, this.goals[0].y);
         this.addSpotlightCurtains(goalP.x, goalP.y, C * 2.2, C * 2.2);
         text = "白がここまで来たらゴールです";
-        var arrow = Sprite("arrow")
+        arrow = Sprite("arrow")
           .setPosition(W / 2 + 135, 590)
           .addChildTo(this);
         arrow.scaleX *= -1;
@@ -747,21 +754,28 @@ phina.globalize();
       } else if (this.tutorialStep === 3) {
         // 盤面全体を見せ、濃色パネルで文章の視認性を確保する。
         var panel = RectangleShape({
-          width: 590, height: 330, cornerRadius: 22,
+          width: 590, height: 430, cornerRadius: 22,
           fill: "rgba(0,0,0,0.62)", stroke: "transparent",
         }).setPosition(W / 2, 520).addChildTo(this);
         this.addTutorial(panel);
-        text = "自由に石を置いて\n白石をゴールへみちびこう！\n\nなお、このゲームでは\n黒石が取られたらそこで終わり、\nというルールにしています";
+        text = "自由に石を置いて\n白石をGへみちびこう！\n\nGがいくつかあるステージでは\n全部のGを通ればゴール！\n\n通る順番は自由です";
         textY = 520;
       } else {
         var panel = RectangleShape({ width:590, height:280, cornerRadius:22, fill:"rgba(0,0,0,0.62)", stroke:"transparent" }).setPosition(W/2,520).addChildTo(this);
         this.addTutorial(panel);
-        text = "Gがいくつかあるステージでは\n全部のGを通ればゴール！\n\n通る順番は自由です"; textY=520;
+        text = "なお、このゲームでは\n黒石が取られると終わりです\n（なのでホウリコミはできません）";
+        textY = 520;
       }
-      this.addTutorial(Label({
+      var tutorialText = Label({
         text: text, fontSize: 34, fill: "#fff", fontWeight: "bold",
         lineHeight: 1.35, stroke: "rgba(0,0,0,0.68)", strokeWidth: 6, align: "center",
-      }).setPosition(textX, textY).addChildTo(this));
+      }).setPosition(textX, textY).addChildTo(this);
+      this.addTutorial(tutorialText);
+      // 説明文 → 矢印の順で、軽くポンッと時間差表示する。
+      var textDelay = this.tutorialStep === 1 ? 140 : 50;
+      var arrowDelay = this.tutorialStep === 1 ? 330 : 190;
+      this.popTutorialElement(tutorialText, textDelay, 0.84);
+      if (arrow) this.popTutorialElement(arrow, arrowDelay, 0.72);
       // this.addTutorial(Label({
       //   text: this.tutorialStep < 3 ? "タップして次へ" : "タップしてはじめよう！",
       //   fontSize: 22, fill: "#fff", fontWeight: "bold",
