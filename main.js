@@ -271,7 +271,7 @@ phina.globalize();
       this.tutorialObjects = [];
       this.replayNavVisible = false;
       this.replayCurrentIndex = -1;
-      this.playbackInterval = 200;
+      this.playbackInterval = 350;
       this.simulationResult = null;
       this.goalReached = false;
       this.currentStageId = 1;
@@ -286,9 +286,9 @@ phina.globalize();
       this.storageKey = "pitagora-shicho-position";
       this.workMenuOpen = false;
       this.workMenuObjects = [];
-      // 編集時の短押し/長押し判定用。短押し=白、350ms長押し=黒。
+      // 編集時の短押し/長押し判定用。短押し=白、280ms長押し=黒。
       this.placePress = null;
-      this.placePressThreshold = 350;
+      this.placePressThreshold = 280;
       this.placePressCancelDistance = 32;
       this.sharedBoardLoaded = false;
       if (SHARED_BOARD) {
@@ -330,9 +330,9 @@ phina.globalize();
       this.replayCounter = Label({ text: "0 / 0", fontSize: 22, fill: "#fff", fontWeight: "bold" })
         .setPosition(190, BY + 92).addChildTo(this);
       this.nextReplayButton = btn(this, 285, BY + 92, 70, "▶", "#4A4A44", () => this.stepReplay(1));
-      this.slowSpeedButton = btn(this, 410, BY + 92, 64, "遅", "#607d8b", () => this.setPlaybackSpeed(400));
-      this.normalSpeedButton = btn(this, 500, BY + 92, 64, "中", "#607d8b", () => this.setPlaybackSpeed(200));
-      this.fastSpeedButton = btn(this, 590, BY + 92, 64, "速", "#607d8b", () => this.setPlaybackSpeed(100));
+      this.slowSpeedButton = btn(this, 410, BY + 92, 64, "遅", "#607d8b", () => this.setPlaybackSpeed(500));
+      this.normalSpeedButton = btn(this, 500, BY + 92, 64, "中", "#607d8b", () => this.setPlaybackSpeed(350));
+      this.fastSpeedButton = btn(this, 590, BY + 92, 64, "速", "#607d8b", () => this.setPlaybackSpeed(150));
       this.setReplayNavVisible(false);
       this.updateSpeedButtons();
       this.updateButtons();
@@ -525,9 +525,9 @@ phina.globalize();
     },
     updateSpeedButtons: function () {
       [
-        { button: this.slowSpeedButton, value: 400 },
-        { button: this.normalSpeedButton, value: 200 },
-        { button: this.fastSpeedButton, value: 100 },
+        { button: this.slowSpeedButton, value: 500 },
+        { button: this.normalSpeedButton, value: 350 },
+        { button: this.fastSpeedButton, value: 150 },
       ].forEach((item) => {
         if (!item.button) return;
         var selected = this.playbackInterval === item.value;
@@ -1348,7 +1348,7 @@ phina.globalize();
         // 既存石は短いクリック/タップで削除。ドラッグならmove側でキャンセル済み。
         this.board.set(press.x, press.y, G.EMPTY);
       } else if (!press.becameBlack) {
-        // 350ms未満なら白で確定。
+        // 280ms未満なら白で確定。
         this.board.set(press.x, press.y, G.WHITE);
       }
       this.frames = [];
