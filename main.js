@@ -42,7 +42,8 @@ phina.globalize();
       ],
     },
   ];
-  var GOALS = STAGES[0].goals;
+  // var GOALS = STAGES[0].goals;
+  var GOALS = [];
   var INIT = [
     { x: 0, y: 10, c: G.BLACK },
     { x: 0, y: 11, c: G.BLACK },
@@ -64,25 +65,34 @@ phina.globalize();
         { x: 3, y: 9, c: G.WHITE },
       ],
     },
-    4: {
+    3: {
       initial: [
-        { x: 2, y: 8, c: G.BLACK },
-        { x: 3, y: 8, c: G.BLACK },
-        { x: 2, y: 9, c: G.WHITE },
-        { x: 3, y: 9, c: G.WHITE },
-      ],
-      moves: [
         { x: 1, y: 10, c: G.WHITE },
         { x: 1, y: 9, c: G.BLACK },
+
+        { x: 4, y: 6, c: G.BLACK },
+        { x: 5, y: 6, c: G.BLACK },
+        { x: 4, y: 7, c: G.WHITE },
+        { x: 5, y: 7, c: G.WHITE },
+      ],
+      moves: [
         { x: 2, y: 10, c: G.WHITE },
+        { x: 3, y: 10, c: G.BLACK },
+        { x: 2, y: 9, c: G.WHITE },
+        { x: 2, y: 8, c: G.BLACK },
+        { x: 3, y: 9, c: G.WHITE },
         { x: 4, y: 9, c: G.BLACK },
-        { x: 3, y: 10, c: G.WHITE },
-        { x: 3, y: 11, c: G.BLACK },
-        { x: 4, y: 10, c: G.WHITE },
-        { x: 5, y: 10, c: G.BLACK },
-        { x: 4, y: 11, c: G.WHITE },
-        { x: 5, y: 11, c: G.BLACK },
-        { x: 4, y: 12, c: G.WHITE },
+        { x: 3, y: 8, c: G.WHITE },
+        { x: 3, y: 7, c: G.BLACK },
+        { x: 4, y: 8, c: G.WHITE },
+        { x: 6, y: 7, c: G.BLACK },
+        { x: 5, y: 8, c: G.WHITE },
+        { x: 5, y: 9, c: G.BLACK },
+        { x: 6, y: 8, c: G.WHITE },
+        { x: 7, y: 8, c: G.BLACK },
+        { x: 6, y: 9, c: G.WHITE },
+        { x: 6, y: 10, c: G.BLACK },
+        { x: 7, y: 9, c: G.WHITE },
       ],
     },
   };
@@ -90,8 +100,8 @@ phina.globalize();
   var TUTORIAL_CARD_Y = {
     1: 465,
     2: 485,
-    3: 455,
-    4: 445,
+    3: 355,
+    4: 455,
     5: 390,
     6: 485,
   };
@@ -605,7 +615,7 @@ phina.globalize();
       this.last = null;
       // ステージ番号に依存しない通常の編集メッセージへ統一する。
       // URL共有/LocalStorageから独立配置を開く場合にも同じ文言を使える。
-      this.msg.text = "自由に石を置こう！\nタップで白、長押しで黒だよ";
+      this.msg.text = "自由に石を置こう！\nタップで白、長押しで黒です";
       this.render();
       this.updateButtons();
     },
@@ -770,7 +780,7 @@ phina.globalize();
         this.setReplayNavVisible(false);
         this.clearHints();
         this.last = null;
-        this.msg.text = "自由に石を置こう！\nタップで白、長押しで黒だよ";
+        this.msg.text = "自由に石を置こう！\nタップで白、長押しで黒です";
         this.render();
         this.updateButtons();
       } catch (e) {
@@ -1080,40 +1090,57 @@ phina.globalize();
         height = 170,
         arrow = null;
       if (this.tutorialStep === 1) {
-        var p = pos(TARGET.x, TARGET.y);
-        this.addSpotlightCurtains(p.x - C * 0.45, p.y, C * 4, C * 3.2);
+        // var p = pos(TARGET.x, TARGET.y);
+        // this.addSpotlightCurtains(p.x - C * 0.45, p.y, C * 4, C * 3.2);
         text =
-          "このゲームはシチョウで遊びます\n\nここから白が逃げ出して\n黒がシチョウで追いかけます";
+          "このゲームはシチョウで遊びます\n\nここから白が逃げ出して\n黒が追いかけます";
         height = 225;
         arrow = Sprite("arrow")
           .setPosition(W / 2 - 240, 630)
           .addChildTo(this);
         this.addTutorial(arrow);
       } else if (this.tutorialStep === 2) {
-        text = "シチョウで追いかけるのは\n自動なので操作は不要です";
+        text = "逃げたり、追いかけたりは\nアプリが自動で行います";
         this.startTutorialDemo(TUTORIAL_DEMOS[2]);
       } else if (this.tutorialStep === 3) {
-        var g = pos(this.goals[0].x, this.goals[0].y);
-        this.addSpotlightCurtains(g.x, g.y, C * 2.2, C * 2.2);
+        text =
+          "あらかじめ石を配置することで\nシチョウの進む方向を変えられます\n\nこれがこのゲームのポイントです！";
+        this.startTutorialDemo(TUTORIAL_DEMOS[3]);
+        height = 235;
+        arrow = Sprite("arrow")
+          .setPosition(W / 2 + 55, 530)
+          .setRotation(90)
+          .addChildTo(this);
+        arrow.scaleX *= -1;
+        this.addTutorial(arrow);
+      } else if (this.tutorialStep === 4) {
+        // var g = pos(this.goals[0].x, this.goals[0].y);
+        // this.addSpotlightCurtains(g.x, g.y, C * 2.2, C * 2.2);
+        this.createTutorialGoal(9, 9);
         text = "白がG（ゴール）に来れたら\nステージクリア！";
         arrow = Sprite("arrow")
           .setPosition(W / 2 + 135, 590)
           .addChildTo(this);
         arrow.scaleX *= -1;
         this.addTutorial(arrow);
-      } else if (this.tutorialStep === 4) {
-        text =
-          "石を配置しておけば\n進む方向を変えられます\n\nゴールを目指そう！";
-        this.startTutorialDemo(TUTORIAL_DEMOS[4]);
-        height = 205;
       } else if (this.tutorialStep === 5) {
-        this.createTutorialGoal(6, 6);
+        arrow = Sprite("arrow")
+          .setPosition(W / 2 + 135, 590)
+          .addChildTo(this);
+        arrow.scaleX *= -1;
+        this.addTutorial(arrow);
+        arrow = Sprite("arrow")
+          .setPosition(W / 2 - 10, 590)
+          .addChildTo(this);
+        arrow.scaleX *= -1;
+        this.addTutorial(arrow);
+        this.createTutorialGoal(6, 9);
         this.createTutorialGoal(9, 9);
         text = "Gがいくつかあるステージは\nすべてを通過できたらクリア！";
       } else {
         text =
-          "なお、このゲームでは\n黒石が取られると失敗です\n（なのでホウリコミはできません）";
-        height = 205;
+          "最後に、このゲームでは\n黒石が取られると失敗です\n（なのでホウリコミはできません）\n\nでは始めましょう！";
+        height = 305;
       }
       var cardY = TUTORIAL_CARD_Y[this.tutorialStep] || 485;
       var card = this.createTutorialTextCard(text, cardY, height);
@@ -1142,7 +1169,7 @@ phina.globalize();
           this.tutorialActive = false;
           this.setMainButtonsVisible(true);
           this.setReplayNavVisible(false);
-          this.msg.text = "自由に石を置こう！\nタップで白、長押しで黒だよ";
+          this.msg.text = "自由に石を置こう！\nタップで白、長押しで黒です";
           this.updateButtons();
           this.openStageSelect(false);
         });
@@ -2298,7 +2325,7 @@ phina.globalize();
       this.setReplayNavVisible(false);
       this.clearHints();
       this.last = null;
-      this.msg.text = "自由に石を置こう！\nタップで白、長押しで黒だよ";
+      this.msg.text = "自由に石を置こう！\nタップで白、長押しで黒です";
       this.render();
       this.updateButtons();
     },
