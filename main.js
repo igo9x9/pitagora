@@ -18,8 +18,8 @@ phina.globalize();
       id: 2,
       name: "ステージ 2",
       goals: [
+        { x: 6, y: 6 },
         { x: 9, y: 9 },
-        { x: 9, y: 3 },
       ],
     },
     {
@@ -90,8 +90,8 @@ phina.globalize();
   var TUTORIAL_CARD_Y = {
     1: 465,
     2: 485,
-    3: 485,
-    4: 485,
+    3: 455,
+    4: 445,
     5: 390,
     6: 485,
   };
@@ -277,7 +277,7 @@ phina.globalize();
       var scale = targetWidth / titleLogo.width;
       titleLogo.setScale(scale);
 
-      btn(this, W / 2, 800, 330, "あそぶ", "#ef6c00", () => {
+      btn(this, W / 2, 800, 230, "はじめる", "#ef6c00", () => {
         // 押下状態を先に1フレーム以上見せてからMainSceneを生成する。
         this.tweener
           .clear()
@@ -458,7 +458,7 @@ phina.globalize();
         .setPosition(W / 2, MY)
         .addChildTo(this);
       if (this.sharedBoardLoaded) {
-        this.msg.text = "共有された配置です。どう動くかな？";
+        this.msg.text = "共有された配置です。スタートしてみよう！";
       }
       // 4つの操作を横一列に配置。右端の細い「⋮」は作品メニュー。
       this.startButton = btn(this, 115, BY, 180, "スタート", "#ef6c00", () =>
@@ -1090,27 +1090,29 @@ phina.globalize();
           .addChildTo(this);
         this.addTutorial(arrow);
       } else if (this.tutorialStep === 2) {
-        text = "シチョウで追いかけるのは\n自動的に行われます";
+        text = "シチョウで追いかけるのは\n自動なので操作は不要です";
         this.startTutorialDemo(TUTORIAL_DEMOS[2]);
       } else if (this.tutorialStep === 3) {
         var g = pos(this.goals[0].x, this.goals[0].y);
         this.addSpotlightCurtains(g.x, g.y, C * 2.2, C * 2.2);
-        text = "白がG（ゴール）に来れたら\nステージクリアです";
+        text = "白がG（ゴール）に来れたら\nステージクリア！";
         arrow = Sprite("arrow")
           .setPosition(W / 2 + 135, 590)
           .addChildTo(this);
         arrow.scaleX *= -1;
         this.addTutorial(arrow);
       } else if (this.tutorialStep === 4) {
-        text = "石を配置しておけば\n進む方向を変えられます";
+        text =
+          "石を配置しておけば\n進む方向を変えられます\n\nゴールを目指そう！";
         this.startTutorialDemo(TUTORIAL_DEMOS[4]);
+        height = 205;
       } else if (this.tutorialStep === 5) {
         this.createTutorialGoal(6, 6);
         this.createTutorialGoal(9, 9);
-        text = "Gがいくつかあるステージは\nすべてを通過したらクリア！";
+        text = "Gがいくつかあるステージは\nすべてを通過できたらクリア！";
       } else {
         text =
-          "このゲームでは\n黒石が取られると失敗です\n（なのでホウリコミはできません）";
+          "なお、このゲームでは\n黒石が取られると失敗です\n（なのでホウリコミはできません）";
         height = 205;
       }
       var cardY = TUTORIAL_CARD_Y[this.tutorialStep] || 485;
