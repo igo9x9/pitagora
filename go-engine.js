@@ -138,6 +138,30 @@
         }
       return out;
     }
+    playWhiteCapture(b, t, captures) {
+      if (!captures || !captures.length) return null;
+      var ordered = captures.slice().sort((a, b) =>
+        a.move.y - b.move.y || a.move.x - b.move.x,
+      );
+      for (var capture of ordered) {
+        var move = capture.move;
+        var result = b.play(move.x, move.y, WHITE);
+        if (!result) continue;
+        // 元の追跡対象が捕獲後も白石として残るなら、その白一団を追い続ける。
+        // 元の対象が消えた場合だけ、捕獲手の白石を新しい対象にする。
+        var nextTarget =
+          t && result.board.get(t.x, t.y) === WHITE
+            ? { x: t.x, y: t.y }
+            : { x: move.x, y: move.y };
+        return {
+          board: result.board,
+          target: nextTarget,
+          move: { x: move.x, y: move.y },
+          captured: result.captured,
+        };
+      }
+      return null;
+    }
     hasObstacleLiberty(b, g) {
       return !!(g && g.liberties.some((l) => b.get(l.x, l.y) === BLOCK));
     }
@@ -377,8 +401,21 @@
           ans = { outcome: "captured", plies: 0 };
         else if (w.status === "white-branch")
           ans = { outcome: "whiteBranch", plies: 0 };
-        else if (w.status === "white-can-capture")
-          ans = { outcome: "whiteCanCapture", plies: 0 };
+        else if (w.status === "white-can-capture") {
+          // 白が実際に黒石を取り、捕獲後の盤面から黒番の読みを続ける。
+          var capture = this.playWhiteCapture(b, t, w.captures);
+          if (!capture) ans = { outcome: "illegal", plies: 0 };
+          else {
+            ans = this.read(
+              capture.board,
+              capture.target,
+              "black",
+              np,
+              d + 1,
+            );
+            ans = { outcome: ans.outcome, plies: ans.plies + 1 };
+          }
+        }
         else if (w.status === "obstacle")
           ans = { outcome: "obstacle", plies: 0 };
         else if (w.status === "no-escape")
