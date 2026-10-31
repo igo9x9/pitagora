@@ -1117,7 +1117,7 @@ phina.globalize();
         // var g = pos(this.goals[0].x, this.goals[0].y);
         // this.addSpotlightCurtains(g.x, g.y, C * 2.2, C * 2.2);
         this.createTutorialGoal(9, 9);
-        text = "白がG（ゴール）まで来たら\nステージクリア！";
+        text = "白がG（ゴール）まで来たら\nステージクリア";
         arrow = Sprite("arrow")
           .setPosition(W / 2 + 135, 590)
           .addChildTo(this);
@@ -1136,7 +1136,8 @@ phina.globalize();
         this.addTutorial(arrow);
         this.createTutorialGoal(6, 9);
         this.createTutorialGoal(9, 9);
-        text = "Gがいくつかあるステージは\nすべてを通過したらクリア！";
+        text = "Gがいくつかあるステージは\nすべてを通過したらクリア\n\nルールは以上です！";
+        height = 235;
       }
       var cardY = TUTORIAL_CARD_Y[this.tutorialStep] || 485;
       var card = this.createTutorialTextCard(text, cardY, height);
