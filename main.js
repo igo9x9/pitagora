@@ -1137,10 +1137,6 @@ phina.globalize();
         this.createTutorialGoal(6, 9);
         this.createTutorialGoal(9, 9);
         text = "Gがいくつかあるステージは\nすべてを通過したらクリア！";
-      } else {
-        text =
-          "最後に、このゲームでは\n黒石が取られると失敗です\n（なのでホウリコミはできません）\n\nそれではスタート！";
-        height = 305;
       }
       var cardY = TUTORIAL_CARD_Y[this.tutorialStep] || 485;
       var card = this.createTutorialTextCard(text, cardY, height);
@@ -1154,7 +1150,7 @@ phina.globalize();
     },
     nextTutorial: function () {
       if (!this.tutorialActive) return;
-      if (this.tutorialStep < 6) {
+      if (this.tutorialStep < 5) {
         this.tutorialStep++;
         this.showTutorialStep();
         return;
@@ -2014,6 +2010,26 @@ phina.globalize();
       }
       return false;
     },
+    continueAfterWhiteCapture: function (captureInfo) {
+      if (!captureInfo || !captureInfo.move) return null;
+      var move = captureInfo.move;
+      var result = this.board.play(move.x, move.y, G.WHITE);
+      if (!result) return null;
+      this.board = result.board;
+      this.last = { x: move.x, y: move.y };
+      this.moveCount++;
+      this.recordRunMove(G.WHITE, move);
+      this.turn = "black";
+      this.clearHints();
+      var whiteGroup = this.board.groupAt(move.x, move.y);
+      if (whiteGroup) {
+        var passedGoals = this.goals.filter((goal) =>
+          whiteGroup.stones.some((stone) => stone.x === goal.x && stone.y === goal.y),
+        );
+        this.markReachedGoals(passedGoals);
+      }
+      return result;
+    },
     calculateAll: function () {
       this.board = this.normal();
       this.invalidateStoneDisplay();
@@ -2102,10 +2118,23 @@ phina.globalize();
             break;
           }
           if (r.status === "white-can-capture") {
-            this.collectCaptureHints(r);
-            resultText = "黒石が取られてしまう！\n残念…";
-            this.save(resultText);
-            break;
+            // 取る石数に関係なく白が実際に取り、その盤面からヨミを続ける。
+            var captures = (r.captures || []).slice().sort((a, b) =>
+              a.move.y - b.move.y || a.move.x - b.move.x,
+            );
+            var captureResult = this.continueAfterWhiteCapture(captures[0]);
+            if (!captureResult) {
+              resultText = "白はそこに打てない！\n残念…";
+              this.save(resultText);
+              break;
+            }
+            var reachedAfterCapture = this.reachedGoalCount();
+            if (reachedAfterCapture >= this.goals.length) {
+              resultText = "ゴール！（" + this.moveCount + "手）";
+              this.goalReached = true; this.save(resultText); success = true; break;
+            }
+            this.save(captureResult.captured.length + "個の黒石を取った！");
+            continue;
           }
           if (r.status !== "ok") {
             resultText =
