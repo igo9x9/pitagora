@@ -1093,18 +1093,18 @@ phina.globalize();
         // var p = pos(TARGET.x, TARGET.y);
         // this.addSpotlightCurtains(p.x - C * 0.45, p.y, C * 4, C * 3.2);
         text =
-          "このゲームはシチョウで遊びます\n\nここから白が逃げ出して\n黒が追いかけます";
+          "このゲームは、シチョウで遊びます\n\nここから白が逃げ出して\n黒が追いかけます";
         height = 225;
         arrow = Sprite("arrow")
           .setPosition(W / 2 - 240, 630)
           .addChildTo(this);
         this.addTutorial(arrow);
       } else if (this.tutorialStep === 2) {
-        text = "逃げたり、追いかけたりは\nアプリが自動で行います";
+        text = "逃げたり、追いかけたりは\nアプリが自動で進めます";
         this.startTutorialDemo(TUTORIAL_DEMOS[2]);
       } else if (this.tutorialStep === 3) {
         text =
-          "あらかじめ石を配置することで\nシチョウの進む方向を変えられます\n\nこれがこのゲームのポイントです！";
+          "あらかじめ石を配置することで\nシチョウの進む方向を変えられます\n\nこのゲームのポイントです！";
         this.startTutorialDemo(TUTORIAL_DEMOS[3]);
         height = 235;
         arrow = Sprite("arrow")
@@ -1117,7 +1117,7 @@ phina.globalize();
         // var g = pos(this.goals[0].x, this.goals[0].y);
         // this.addSpotlightCurtains(g.x, g.y, C * 2.2, C * 2.2);
         this.createTutorialGoal(9, 9);
-        text = "白がG（ゴール）に来れたら\nステージクリア！";
+        text = "白がG（ゴール）まで来たら\nステージクリア！";
         arrow = Sprite("arrow")
           .setPosition(W / 2 + 135, 590)
           .addChildTo(this);
@@ -1136,10 +1136,10 @@ phina.globalize();
         this.addTutorial(arrow);
         this.createTutorialGoal(6, 9);
         this.createTutorialGoal(9, 9);
-        text = "Gがいくつかあるステージは\nすべてを通過できたらクリア！";
+        text = "Gがいくつかあるステージは\nすべてを通過したらクリア！";
       } else {
         text =
-          "最後に、このゲームでは\n黒石が取られると失敗です\n（なのでホウリコミはできません）\n\nでは始めましょう！";
+          "最後に、このゲームでは\n黒石が取られると失敗です\n（なのでホウリコミはできません）\n\nそれではスタート！";
         height = 305;
       }
       var cardY = TUTORIAL_CARD_Y[this.tutorialStep] || 485;
