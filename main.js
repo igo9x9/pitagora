@@ -383,7 +383,7 @@ phina.globalize();
       menuButton(320, "ステージをえらぶ", "#00897b", options.onStageSelect);
       menuButton(430, "この配置を保存", "#ef6c00", options.onSave);
       menuButton(520, "保存した配置を読込", "#1976d2", options.onLoad);
-      menuButton(630, "共有リンクをコピー", "#4A4A44", options.onShare);
+      menuButton(630, "共有", "#4A4A44", options.onShare);
       menuButton(740, "タイトルへ戻る", "#795548", options.onTitle);
       menuButton(830, "閉じる", "#607d8b", null);
     },
@@ -683,24 +683,64 @@ phina.globalize();
       url.searchParams.set("p", payload);
       return url.toString();
     },
+    isMobileLikeForShare: function () {
+      var ua = navigator.userAgent || "";
+      if (/Android|iPhone|iPad|iPod|Mobile/i.test(ua)) return true;
+      return navigator.maxTouchPoints > 1 && Math.min(screen.width, screen.height) <= 1024;
+    },
     copyShareUrl: function () {
       var url = this.createShareUrl();
       if (!url) return;
-      var done = () => {
+
+      var copyDone = () => {
         this.msg.text = "共有リンクをコピーしました";
       };
-      var failed = (e) => {
+      var copyFailed = (e) => {
         console.error("共有リンクのコピーに失敗", e);
         this.msg.text = "リンクをコピーできません…";
       };
-      if (navigator.clipboard && navigator.clipboard.writeText) {
-        navigator.clipboard
-          .writeText(url)
-          .then(done)
-          .catch(() => this.copyTextFallback(url, done, failed));
-      } else {
-        this.copyTextFallback(url, done, failed);
+      var copyWithClipboard = () => {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard
+            .writeText(url)
+            .then(copyDone)
+            .catch((e) => {
+              console.warn("Clipboard APIでコピーできなかったためフォールバックします", e);
+              this.copyTextFallback(url, copyDone, copyFailed);
+            });
+        } else {
+          this.copyTextFallback(url, copyDone, copyFailed);
+        }
+      };
+
+      // スマホではOS標準の共有シートを優先する。Xなどのアプリ内ブラウザで
+      // Clipboard APIが拒否される環境でも、Web Share APIが使えれば共有できる。
+      if (this.isMobileLikeForShare() && typeof navigator.share === "function") {
+        try {
+          var sharePromise = navigator.share({
+            title: "ピタゴラシチョウ",
+            url: url,
+          });
+          if (sharePromise && typeof sharePromise.then === "function") {
+            sharePromise
+              .then(() => {
+                this.msg.text = "共有しました";
+              })
+              .catch((e) => {
+                // ユーザーが共有シートを閉じただけなら失敗表示しない。
+                if (e && e.name === "AbortError") return;
+                console.warn("Web Share APIで共有できなかったためコピーを試します", e);
+                copyWithClipboard();
+              });
+          }
+          return;
+        } catch (e) {
+          console.warn("Web Share APIを開始できなかったためコピーを試します", e);
+        }
       }
+
+      // PCまたはWeb Share API未対応環境では従来どおりクリップボードへ。
+      copyWithClipboard();
     },
     copyTextFallback: function (text, done, failed) {
       try {
