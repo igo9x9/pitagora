@@ -688,76 +688,157 @@ phina.globalize();
       if (/Android|iPhone|iPad|iPod|Mobile/i.test(ua)) return true;
       return navigator.maxTouchPoints > 1 && Math.min(screen.width, screen.height) <= 1024;
     },
+    shareErrorText: function (error) {
+      if (!error) return "なし";
+      var name = error.name || "Error";
+      var message = error.message || String(error);
+      return name + ": " + message;
+    },
+    showShareDebugOverlay: function (debug) {
+      var old = document.getElementById("pitagora-share-debug");
+      if (old) old.remove();
+
+      var overlay = document.createElement("div");
+      overlay.id = "pitagora-share-debug";
+      overlay.style.cssText = [
+        "position:fixed", "inset:0", "z-index:2147483647",
+        "background:rgba(0,0,0,.72)", "padding:18px",
+        "box-sizing:border-box", "overflow:auto",
+        "font-family:system-ui,-apple-system,sans-serif"
+      ].join(";");
+
+      var panel = document.createElement("div");
+      panel.style.cssText = [
+        "max-width:680px", "margin:20px auto", "background:#fff",
+        "color:#111", "border-radius:14px", "padding:18px",
+        "box-sizing:border-box", "box-shadow:0 8px 30px rgba(0,0,0,.35)"
+      ].join(";");
+
+      var title = document.createElement("h2");
+      title.textContent = "共有機能の診断情報";
+      title.style.cssText = "margin:0 0 10px;font-size:21px";
+      panel.appendChild(title);
+
+      var note = document.createElement("p");
+      note.textContent = "共有とコピーが失敗しました。この画面をスクリーンショットしてください。";
+      note.style.cssText = "margin:0 0 12px;font-size:15px;line-height:1.5";
+      panel.appendChild(note);
+
+      var lines = [
+        "secureContext: " + debug.secureContext,
+        "mobileLike: " + debug.mobileLike,
+        "navigator.share: " + debug.hasShare,
+        "Web Share tried: " + debug.shareTried,
+        "Web Share error: " + (debug.shareError || "なし"),
+        "navigator.clipboard: " + debug.hasClipboard,
+        "clipboard.writeText: " + debug.hasWriteText,
+        "Clipboard tried: " + debug.clipboardTried,
+        "Clipboard error: " + (debug.clipboardError || "なし"),
+        "execCommand tried: " + debug.execCommandTried,
+        "execCommand result: " + String(debug.execCommandResult),
+        "execCommand error: " + (debug.execCommandError || "なし"),
+        "userAgent: " + debug.userAgent
+      ];
+      var pre = document.createElement("pre");
+      pre.textContent = lines.join("\n");
+      pre.style.cssText = [
+        "white-space:pre-wrap", "overflow-wrap:anywhere", "user-select:text",
+        "-webkit-user-select:text", "background:#f3f4f6", "border:1px solid #ddd",
+        "border-radius:8px", "padding:12px", "font-size:13px", "line-height:1.55"
+      ].join(";");
+      panel.appendChild(pre);
+
+      var close = document.createElement("button");
+      close.type = "button";
+      close.textContent = "閉じる";
+      close.style.cssText = [
+        "display:block", "width:100%", "margin-top:14px", "padding:12px",
+        "border:0", "border-radius:8px", "background:#607d8b",
+        "color:#fff", "font-size:17px", "font-weight:bold"
+      ].join(";");
+      close.addEventListener("click", function () { overlay.remove(); });
+      panel.appendChild(close);
+      overlay.appendChild(panel);
+      document.body.appendChild(overlay);
+    },
     copyShareUrl: function () {
       var url = this.createShareUrl();
       if (!url) return;
-
-      var copyDone = () => {
-        this.msg.text = "共有リンクをコピーしました";
+      var debug = {
+        secureContext: !!window.isSecureContext,
+        mobileLike: this.isMobileLikeForShare(),
+        hasShare: typeof navigator.share === "function",
+        shareTried: false,
+        shareError: null,
+        hasClipboard: !!navigator.clipboard,
+        hasWriteText: !!(navigator.clipboard && navigator.clipboard.writeText),
+        clipboardTried: false,
+        clipboardError: null,
+        execCommandTried: false,
+        execCommandResult: null,
+        execCommandError: null,
+        userAgent: navigator.userAgent || "",
       };
-      var copyFailed = (e) => {
-        console.error("共有リンクのコピーに失敗", e);
+      var done = () => { this.msg.text = "共有リンクをコピーしました"; };
+      var allFailed = () => {
         this.msg.text = "リンクをコピーできません…";
+        console.error("共有処理がすべて失敗", debug);
+        this.showShareDebugOverlay(debug);
       };
-      var copyWithClipboard = () => {
+      var execFallback = () => {
+        debug.execCommandTried = true;
+        try {
+          var area = document.createElement("textarea");
+          area.value = url;
+          area.readOnly = true;
+          area.style.position = "fixed";
+          area.style.left = "-9999px";
+          area.style.top = "0";
+          document.body.appendChild(area);
+          area.focus();
+          area.select();
+          area.setSelectionRange(0, area.value.length);
+          debug.execCommandResult = document.execCommand("copy");
+          area.remove();
+          if (debug.execCommandResult) done();
+          else allFailed();
+        } catch (e) {
+          debug.execCommandError = this.shareErrorText(e);
+          allFailed();
+        }
+      };
+      var clipboardFallback = () => {
         if (navigator.clipboard && navigator.clipboard.writeText) {
-          navigator.clipboard
-            .writeText(url)
-            .then(copyDone)
-            .catch((e) => {
-              console.warn("Clipboard APIでコピーできなかったためフォールバックします", e);
-              this.copyTextFallback(url, copyDone, copyFailed);
-            });
+          debug.clipboardTried = true;
+          navigator.clipboard.writeText(url).then(done).catch((e) => {
+            debug.clipboardError = this.shareErrorText(e);
+            console.warn("Clipboard APIでコピーできませんでした", e);
+            execFallback();
+          });
         } else {
-          this.copyTextFallback(url, copyDone, copyFailed);
+          execFallback();
         }
       };
 
-      // スマホではOS標準の共有シートを優先する。Xなどのアプリ内ブラウザで
-      // Clipboard APIが拒否される環境でも、Web Share APIが使えれば共有できる。
-      if (this.isMobileLikeForShare() && typeof navigator.share === "function") {
+      if (debug.mobileLike && debug.hasShare) {
+        debug.shareTried = true;
         try {
-          var sharePromise = navigator.share({
-            title: "ピタゴラシチョウ",
-            url: url,
+          var promise = navigator.share({ title: "ピタゴラシチョウ", url: url });
+          Promise.resolve(promise).then(() => {
+            this.msg.text = "共有しました";
+          }).catch((e) => {
+            if (e && e.name === "AbortError") return;
+            debug.shareError = this.shareErrorText(e);
+            console.warn("Web Share APIで共有できませんでした", e);
+            clipboardFallback();
           });
-          if (sharePromise && typeof sharePromise.then === "function") {
-            sharePromise
-              .then(() => {
-                this.msg.text = "共有しました";
-              })
-              .catch((e) => {
-                // ユーザーが共有シートを閉じただけなら失敗表示しない。
-                if (e && e.name === "AbortError") return;
-                console.warn("Web Share APIで共有できなかったためコピーを試します", e);
-                copyWithClipboard();
-              });
-          }
           return;
         } catch (e) {
-          console.warn("Web Share APIを開始できなかったためコピーを試します", e);
+          debug.shareError = this.shareErrorText(e);
+          console.warn("Web Share APIを開始できませんでした", e);
         }
       }
-
-      // PCまたはWeb Share API未対応環境では従来どおりクリップボードへ。
-      copyWithClipboard();
-    },
-    copyTextFallback: function (text, done, failed) {
-      try {
-        var area = document.createElement("textarea");
-        area.value = text;
-        area.style.position = "fixed";
-        area.style.opacity = "0";
-        document.body.appendChild(area);
-        area.focus();
-        area.select();
-        if (!document.execCommand("copy"))
-          throw new Error("copy command failed");
-        area.remove();
-        done();
-      } catch (e) {
-        failed(e);
-      }
+      clipboardFallback();
     },
     serializeBoardForStorage: function () {
       var data = this.currentPositionData();
