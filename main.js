@@ -962,8 +962,40 @@ phina.globalize();
         this.nextReplayButton.setInteractive(nextEnabled);
       }
     },
-    showReplayFrame: function (index) {
+    capturedBlackStonesAtFrame: function (index) {
+      if (index <= 0 || index >= this.frames.length) return [];
+      var before = this.frames[index - 1].cells;
+      var after = this.frames[index].cells;
+      var stones = [];
+      for (var i = 0; i < before.length; i++) {
+        if (before[i] === G.BLACK && after[i] === G.EMPTY) {
+          stones.push({ x: i % S, y: Math.floor(i / S) });
+        }
+      }
+      return stones;
+    },
+    showCapturedBlackEffect: function (stones) {
+      (stones || []).forEach((stone) => {
+        var p = pos(stone.x, stone.y);
+        // 新盤面を描いた後、消える直前の黒石だけを最前面に一時複製する。
+        var ghost = CircleShape({
+          radius: 22,
+          fill: "#151719",
+          stroke: "#000",
+          strokeWidth: 2,
+        }).setPosition(p.x, p.y).addChildTo(this.boardLayer);
+        ghost.tweener.clear()
+          .to({ scaleX: 0.35, scaleY: 0.35, alpha: 0 }, 140, "easeInQuad")
+          .call(() => ghost.remove());
+      });
+    },
+    showReplayFrame: function (index, options) {
       if (!this.frames.length) return;
+      options = options || {};
+      var animateCapture = options.animateCapture !== false;
+      var capturedBlackStones = animateCapture
+        ? this.capturedBlackStonesAtFrame(index)
+        : [];
       index = Math.max(0, Math.min(this.frames.length - 1, index));
       var f = this.frames[index];
       var wasGoalReached = this.goalReached;
@@ -1012,6 +1044,9 @@ phina.globalize();
           }, 0);
         }
       }
+      if (capturedBlackStones.length) {
+        this.showCapturedBlackEffect(capturedBlackStones);
+      }
       // 自動再生中、新しく石が置かれたフレームだけ着手エフェクト
       if (!this.replayPaused && f.last) {
         var li = f.last.y * S + f.last.x;
@@ -1037,7 +1072,9 @@ phina.globalize();
       this.replayPaused = true;
       this.tweener.clear();
       var base = this.replayCurrentIndex >= 0 ? this.replayCurrentIndex : 0;
-      this.showReplayFrame(base + delta);
+      this.showReplayFrame(base + delta, {
+        animateCapture: delta > 0,
+      });
       if (this.replayCurrentIndex === this.frames.length - 1) {
         // 手動で最終フレームへ到達したら、結果後の状態へ確定する。
         this.replaying = false;
@@ -2143,11 +2180,13 @@ phina.globalize();
       this.recordRunMove(G.WHITE, move);
       this.turn = "black";
       this.clearHints();
-      // ゴール判定は一団ではなく、今回の白着手座標そのものだけを見る。
-      var passedGoal = this.remainingGoals().find(
-        (goal) => goal.x === move.x && goal.y === move.y,
-      );
-      if (passedGoal) this.markReachedGoals([passedGoal]);
+      var whiteGroup = this.board.groupAt(move.x, move.y);
+      if (whiteGroup) {
+        var passedGoals = this.goals.filter((goal) =>
+          whiteGroup.stones.some((stone) => stone.x === goal.x && stone.y === goal.y),
+        );
+        this.markReachedGoals(passedGoals);
+      }
       return result;
     },
     calculateAll: function () {
@@ -2451,7 +2490,7 @@ phina.globalize();
         this.updateButtons();
         return;
       }
-      this.showReplayFrame(this.fi);
+      this.showReplayFrame(this.fi, { animateCapture: true });
       this.tweener
         .clear()
         .wait(this.playbackInterval)
