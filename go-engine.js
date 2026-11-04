@@ -110,6 +110,15 @@
     containsGoal(g) {
       return this.goalsInGroup(g).length > 0;
     }
+    goalAtMove(move) {
+      if (!move) return null;
+      return (
+        this.goals.find((goal) => goal.x === move.x && goal.y === move.y) || null
+      );
+    }
+    isGoalMove(move) {
+      return !!this.goalAtMove(move);
+    }
     capturableBlackGroups(b, wg, escape) {
       var checked = Object.create(null),
         out = [];
@@ -165,13 +174,157 @@
     hasObstacleLiberty(b, g) {
       return !!(g && g.liberties.some((l) => b.get(l.x, l.y) === BLOCK));
     }
+    whiteCandidates(b, t) {
+      var g = this.targetGroup(b, t);
+      if (!g) return [];
+      var byKey = Object.create(null);
+      var add = (move, kind) => {
+        if (!move) return;
+        var k = key(move.x, move.y);
+        var r = b.play(move.x, move.y, WHITE);
+        if (!r) return;
+        if (byKey[k]) {
+          if (kind === "capture") byKey[k].kind = "escape-capture";
+          return;
+        }
+        var nextTarget =
+          t && r.board.get(t.x, t.y) === WHITE
+            ? { x: t.x, y: t.y }
+            : { x: move.x, y: move.y };
+        byKey[k] = {
+          move: { x: move.x, y: move.y },
+          kind: kind,
+          board: r.board,
+          target: nextTarget,
+          captured: r.captured || [],
+        };
+      };
+
+      // 通常の逃げ手と黒を取る手を、同じ白候補として列挙する。
+      this.playable(b, g).forEach((move) => add(move, "escape"));
+      this.capturableBlackGroups(b, g, null).forEach((capture) =>
+        add(capture.move, "capture"),
+      );
+      return Object.keys(byKey).map((k) => byKey[k]);
+    }
+    whiteCandidateImmediateResult(candidate) {
+      var g = this.targetGroup(candidate.board, candidate.target);
+      if (!g) return { outcome: "captured", plies: 0 };
+      var next = this.playable(candidate.board, g);
+      if (next.length > 2) return { outcome: "whiteBranch", plies: 0 };
+      if (next.length < 2)
+        return {
+          outcome: this.hasObstacleLiberty(candidate.board, g)
+            ? "obstacle"
+            : "noEscape",
+          plies: 0,
+        };
+      return null;
+    }
+    evaluateWhiteCandidate(candidate, path, depth) {
+      var immediate = this.whiteCandidateImmediateResult(candidate);
+      if (immediate) return immediate;
+      var result = this.read(
+        candidate.board,
+        candidate.target,
+        "black",
+        path,
+        depth + 1,
+      );
+      return { outcome: result.outcome, plies: result.plies + 1 };
+    }
+    selectWhiteEvaluation(evaluations) {
+      evaluations.sort((a, b) => {
+        // compare()は黒にとって良い方を正とする。白はその逆を選ぶ。
+        var comparison = this.compare(a.result, b.result);
+        if (comparison) return comparison;
+        if (a.candidate.move.y !== b.candidate.move.y)
+          return a.candidate.move.y - b.candidate.move.y;
+        return a.candidate.move.x - b.candidate.move.x;
+      });
+      return evaluations[0] || null;
+    }
+    chooseWhite(b, t, checkGoal, path, depth) {
+      if (checkGoal === undefined) checkGoal = true;
+      path = path || Object.create(null);
+      depth = depth || 0;
+      var g = this.targetGroup(b, t);
+      if (!g) return { status: "captured" };
+
+      var liberties = this.playable(b, g);
+      // 黒の着手後にすでに逃げ道が複数なら、白はシチョウから脱出済み。
+      if (liberties.length > 1)
+        return { status: "white-branch", count: liberties.length, liberties: liberties };
+
+      var candidates = this.whiteCandidates(b, t);
+      if (!candidates.length)
+        return {
+          status: this.hasObstacleLiberty(b, g) ? "obstacle" : "no-escape",
+          count: 0,
+          liberties: liberties,
+        };
+
+      if (checkGoal) {
+        var goalCandidates = candidates.filter((candidate) =>
+          this.isGoalMove(candidate.move),
+        );
+        if (goalCandidates.length) {
+          goalCandidates.sort((a, b) =>
+            a.move.y - b.move.y || a.move.x - b.move.x,
+          );
+          var goalCandidate = goalCandidates[0];
+          var reachedGoal = this.goalAtMove(goalCandidate.move);
+          return {
+            status: "goal",
+            goals: reachedGoal ? [reachedGoal] : [],
+            move: goalCandidate.move,
+            board: goalCandidate.board,
+            target: goalCandidate.target,
+            captured: goalCandidate.captured,
+            kind: goalCandidate.kind,
+          };
+        }
+      }
+      var evaluations = candidates.map((candidate) => ({
+        candidate: candidate,
+        result: this.evaluateWhiteCandidate(candidate, path, depth),
+      }));
+      var selected = this.selectWhiteEvaluation(evaluations);
+      if (!selected) return { status: "illegal" };
+      var c = selected.candidate;
+      var immediate = this.whiteCandidateImmediateResult(c);
+      if (immediate && immediate.outcome === "whiteBranch") {
+        var branchGroup = this.targetGroup(c.board, c.target);
+        var branchLiberties = this.playable(c.board, branchGroup);
+        return {
+          status: "white-branch",
+          count: branchLiberties.length,
+          liberties: branchLiberties,
+          move: c.move,
+          board: c.board,
+          target: c.target,
+          captured: c.captured,
+          kind: c.kind,
+        };
+      }
+      if (immediate && immediate.outcome === "obstacle")
+        return { status: "obstacle", move: c.move, board: c.board, target: c.target };
+      if (immediate && immediate.outcome === "noEscape")
+        return { status: "no-escape", move: c.move, board: c.board, target: c.target };
+      return {
+        status: "ok",
+        move: c.move,
+        board: c.board,
+        target: c.target,
+        captured: c.captured,
+        kind: c.kind,
+      };
+    }
     whiteEscape(b, t, checkGoal) {
       // 黒の内部読みでは、ゲーム固有のゴール情報を使わない。
       if (checkGoal === undefined) checkGoal = true;
       var g = this.targetGroup(b, t);
       if (!g) return { status: "captured" };
-      if (checkGoal && this.containsGoal(g))
-        return { status: "goal", goals: this.goalsInGroup(g) };
       /* 白の選択肢は実際に着手できる気だけで判定する。 */ var pl =
           this.playable(b, g),
         escape = pl.length === 1 ? pl[0] : null,
@@ -195,14 +348,16 @@
       };
       var eg = r.board.groupAt(m.x, m.y),
         next = this.playable(r.board, eg);
-      if (checkGoal && this.containsGoal(eg))
+      if (checkGoal && this.isGoalMove(m)) {
+        var reachedGoal = this.goalAtMove(m);
         return {
           status: "goal",
-          goals: this.goalsInGroup(eg),
+          goals: reachedGoal ? [reachedGoal] : [],
           move: m,
           board: r.board,
-          target: m,
+          target: t,
         };
+      }
       if (next.length !== 2) {
         if (next.length > 2)
           return {
@@ -396,34 +551,28 @@
       np[k] = true;
       var ans;
       if (turn === "white") {
-        var w = this.whiteEscape(b, t, false);
-        if (w.status === "captured")
-          ans = { outcome: "captured", plies: 0 };
-        else if (w.status === "white-branch")
-          ans = { outcome: "whiteBranch", plies: 0 };
-        else if (w.status === "white-can-capture") {
-          // 白が実際に黒石を取り、捕獲後の盤面から黒番の読みを続ける。
-          var capture = this.playWhiteCapture(b, t, w.captures);
-          if (!capture) ans = { outcome: "illegal", plies: 0 };
-          else {
-            ans = this.read(
-              capture.board,
-              capture.target,
-              "black",
-              np,
-              d + 1,
-            );
-            ans = { outcome: ans.outcome, plies: ans.plies + 1 };
-          }
-        }
-        else if (w.status === "obstacle")
-          ans = { outcome: "obstacle", plies: 0 };
-        else if (w.status === "no-escape")
-          ans = { outcome: "noEscape", plies: 0 };
-        else if (w.status === "illegal") ans = { outcome: "illegal", plies: 0 };
+        var g = this.targetGroup(b, t);
+        if (!g) ans = { outcome: "captured", plies: 0 };
         else {
-          ans = this.read(w.board, w.target, "black", np, d + 1);
-          ans = { outcome: ans.outcome, plies: ans.plies + 1 };
+          var liberties = this.playable(b, g);
+          if (liberties.length > 1)
+            ans = { outcome: "whiteBranch", plies: 0 };
+          else {
+            var whiteCandidates = this.whiteCandidates(b, t);
+            if (!whiteCandidates.length)
+              ans = {
+                outcome: this.hasObstacleLiberty(b, g) ? "obstacle" : "noEscape",
+                plies: 0,
+              };
+            else {
+              var whiteEvaluations = whiteCandidates.map((candidate) => ({
+                candidate: candidate,
+                result: this.evaluateWhiteCandidate(candidate, np, d),
+              }));
+              var whiteSelected = this.selectWhiteEvaluation(whiteEvaluations);
+              ans = whiteSelected.result;
+            }
+          }
         }
       } else {
         var cs = this.blackCandidates(b, t);
@@ -533,7 +682,13 @@
       };
     }
     stepWhite() {
-      return this.whiteEscape(this.board, this.target, true);
+      return this.chooseWhite(
+        this.board,
+        this.target,
+        true,
+        Object.create(null),
+        0,
+      );
     }
   }
   global.GoLogic = {
