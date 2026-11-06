@@ -401,6 +401,8 @@ phina.globalize();
       this.replayPaused = false;
       this.canStart = true;
       this.editBoard = null;
+      this.editGuideCells = null;
+      this.editGuideSprites = [];
       this.objects = [];
       this.frames = [];
       this.runMoves = [];
@@ -599,6 +601,7 @@ phina.globalize();
       this.replayPaused = false;
       this.canStart = true;
       this.editBoard = null;
+      this.editGuideCells = null;
       this.frames = [];
       this.runMoves = [];
       this.previousRunMoves = null;
@@ -1439,6 +1442,8 @@ phina.globalize();
       if (this.running || !this.editBoard) return;
       // 再生中・一時停止中・一手送り/戻し中でも即座に編集へ戻る。
       this.tweener.clear();
+      // 「手直し」を押した瞬間に見えていた盤面を参考表示として固定する。
+      this.editGuideCells = this.board.cells.slice();
       this.board = this.editBoard.clone();
       this.beforeEditCells = this.board.cells.slice();
       this.invalidateStoneDisplay();
@@ -1532,6 +1537,22 @@ phina.globalize();
           label: label,
         });
       });
+      // 手直し用の参考石。実石より先に追加して奥に描画する。
+      for (var gy = 0; gy < S; gy++) {
+        this.editGuideSprites[gy] = [];
+        for (var gx = 0; gx < S; gx++) {
+          var gp2 = pos(gx, gy);
+          var guideStone = CircleShape({
+            radius: 22,
+            fill: "#151719",
+            stroke: "#000",
+            strokeWidth: 2,
+          }).setPosition(gp2.x, gp2.y).addChildTo(this.boardLayer);
+          guideStone.visible = false;
+          guideStone.setInteractive(false);
+          this.editGuideSprites[gy][gx] = guideStone;
+        }
+      }
       for (var y = 0; y < S; y++) {
         this.stoneSprites[y] = [];
         for (var x = 0; x < S; x++) {
@@ -1654,6 +1675,23 @@ phina.globalize();
         }, 0);
       }
     },
+    updateEditGuideSprites: function () {
+      for (var y = 0; y < S; y++) {
+        for (var x = 0; x < S; x++) {
+          var sprite = this.editGuideSprites[y][x];
+          var value = this.editGuideCells ? this.editGuideCells[y * S + x] : G.EMPTY;
+          var actual = this.board.get(x, y);
+          var show = this.canStart && !!this.editGuideCells &&
+            (value === G.BLACK || value === G.WHITE) && actual === G.EMPTY;
+          if (!show) { sprite.visible = false; continue; }
+          sprite.fill = value === G.BLACK ? "#151719" : "#f8f4e8";
+          sprite.stroke = value === G.BLACK ? "#000" : "#aaa";
+          sprite.strokeWidth = 2;
+          sprite.alpha = value === G.BLACK ? 0.18 : 0.28;
+          sprite.visible = true;
+        }
+      }
+    },
     updateStoneSprites: function () {
       var oldLast = this.displayedLastKey;
       var newLast = this.last ? this.last.x + "," + this.last.y : "";
@@ -1720,6 +1758,7 @@ phina.globalize();
     render: function () {
       this.clear();
       this.updateStoneSprites();
+      this.updateEditGuideSprites();
       this.goalSprites.forEach((item) => {
         var key = this.goalKey(item.goal);
         var active = this.goals.some((goal) => this.goalKey(goal) === key);
@@ -2099,6 +2138,8 @@ phina.globalize();
       this.closeWorkMenu();
       if (this.running || this.replaying || !this.canStart) return;
       this.editBoard = this.board.clone();
+      // STARTで参考表示は消す。
+      this.editGuideCells = null;
       this.canStart = false;
       this.running = true;
       this.replaying = false;
@@ -2507,6 +2548,7 @@ phina.globalize();
       this.replayPaused = false;
       this.canStart = true;
       this.editBoard = null;
+      this.editGuideCells = null;
       this.frames = [];
       this.runMoves = [];
       this.previousRunMoves = null;
